@@ -15,7 +15,7 @@
 ## 사용법
 
 1. [Releases](../../releases)에서 `GhostFix.exe`를 받는다.
-2. 다운로드 폴더가 아닌 고정 폴더(예: `C:\GhostFix`)에 옮긴 뒤 실행한다. 관리자 권한이 필요하다.
+2. 받은 `GhostFix.exe`를 실행한다. 관리자 권한이 필요하다. "게임 중 절전 방지와 기록"을 켜면 exe를 `C:\Program Files\GhostFix`에 복사해 두고, 로그인할 때는 그 복사본이 실행된다(받은 파일은 지우거나 옮겨도 된다). 새 버전을 받아 실행하면 복사본도 새 버전으로 바뀐다.
 3. `game.exe` 경로를 확인하고, 원하는 항목을 체크한 뒤 "적용"을 누른다.
 
 받은 파일이 이 저장소에서 빌드한 원본인지 확인하려면, exe가 있는 폴더에서 PowerShell로 `Get-FileHash GhostFix.exe`를 실행해 나온 값을 Releases 설명의 SHA-256 값(또는 함께 올린 `GhostFix.exe.sha256`)과 비교한다. 대소문자는 달라도 된다.
@@ -59,7 +59,7 @@ GitHub에 푸시하면 자동으로 빌드된다(`.github/workflows/build.yml`).
 - `src/Compat.cs`, `src/Pe.cs` — 호환성 설정, LAA 패치
 - `src/Maint.cs` — Windows 자동 유지 관리 설정
 - `src/Crashes.cs`, `src/Wer.cs` — 튕김 기록·Windows 오류 보고 분석, 원인 모듈(DirectX·VC++·오버레이 프로그램) 안내
-- `src/Watch.cs`, `src/SessionLog.cs` — 로그인 자동 시작(작업 스케줄러 `GhostFix`, 가장 높은 권한) 등록, 게임 실행 기록(`session.log`)
+- `src/Watch.cs`, `src/SessionLog.cs` — 로그인 자동 시작(작업 스케줄러 `GhostFix`, 가장 높은 권한, `Program Files\GhostFix`의 복사본 실행) 등록, 게임 실행 기록(`session.log`)
 - `src/Nearby.cs` — 튕긴 시각 앞뒤의 Windows 이벤트 로그
 - `src/TcpInfo.cs` — 게임 접속(TCP) 상태
 - `src/PowerInfo.cs` — 절전 설정, 충돌 가능성 있는 프로그램(VPN·백신·Killer 네트워크 등)
@@ -80,7 +80,7 @@ Free code signing provided by [SignPath.io](https://about.signpath.io/), certifi
 ## 개인정보
 
 GhostFix는 사용자가 직접 요청하지 않는 한 어떤 정보도 다른 네트워크 시스템으로 보내지 않는다.
-기록(`session.log` 등)은 이 PC의 `%LOCALAPPDATA%\GhostFix`에만 저장된다. 네트워크를 쓰는 곳은 사용자가 "오픈채팅 열기" 버튼을 눌렀을 때 브라우저로 카카오 오픈채팅 주소를 여는 것뿐이다.
+기록(`session.log` 등)은 이 PC의 `C:\Program Files\GhostFix\data`(1.1.0까지는 `%LOCALAPPDATA%\GhostFix`)에만 저장된다. 네트워크를 쓰는 곳은 사용자가 "오픈채팅 열기" 버튼을 눌렀을 때 브라우저로 카카오 오픈채팅 주소를 여는 것뿐이다.
 
 This program will not transfer any information to other networked systems unless specifically requested by the user or the person installing or operating it.
 

@@ -29,6 +29,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <Reference Include="Microsoft.CSharp" /><!-- 작업 스케줄러 COM을 dynamic으로 다룬다 -->
     <Reference Include="System.Core" />
     <Reference Include="System.Drawing" />
     <Reference Include="System.Management" />

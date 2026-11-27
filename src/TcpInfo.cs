@@ -22,12 +22,6 @@ public static class TcpInfo
 		public uint owningPid;
 	}
 
-	private static readonly string[] States = new string[13]
-	{
-		"", "CLOSED", "LISTEN", "SYN_SENT", "SYN_RCVD", "ESTABLISHED", "FIN_WAIT1", "FIN_WAIT2", "CLOSE_WAIT", "CLOSING",
-		"LAST_ACK", "TIME_WAIT", "DELETE_TCB"
-	};
-
 	[DllImport("iphlpapi.dll", SetLastError = true)]
 	private static extern uint GetExtendedTcpTable(IntPtr pTcpTable, ref int dwOutBufLen, bool sort, int ipVersion, int tableClass, uint reserved);
 
@@ -59,7 +53,7 @@ public static class TcpInfo
 						{
 							IPAddress iPAddress = new IPAddress(mIB_TCPROW_OWNER_PID.remoteAddr);
 							int num4 = (int)(((mIB_TCPROW_OWNER_PID.remotePort & 0xFF) << 8) | ((mIB_TCPROW_OWNER_PID.remotePort >> 8) & 0xFF));
-							list.Add(iPAddress?.ToString() + ":" + num4);
+							list.Add(iPAddress.ToString() + ":" + num4);
 						}
 						else
 						{

@@ -33,10 +33,6 @@ internal class MainForm : Form
 
 	private Button btnRevert;
 
-	private Button btnLog;
-
-	private Button btnTray;
-
 	private NotifyIcon tray;
 
 	private System.Windows.Forms.Timer watchTimer;
@@ -58,8 +54,6 @@ internal class MainForm : Form
 	private readonly List<FixRow> rows = new List<FixRow>();
 
 	private TableLayoutPanel root;
-
-	private TableLayoutPanel grid;
 
 	private readonly List<Label> gridWrapLabels = new List<Label>();
 
@@ -260,21 +254,10 @@ internal class MainForm : Form
 	{
 		// 1.0.0 방식 자동 시작으로 일반 권한으로 떠 있으면 설정을 바꿀 수 없다.
 		// 관리자 권한으로 다시 실행하면 새 프로세스가 이 프로세스를 끄고 넘겨받는다(자동 시작도 새 방식으로 옮겨짐).
-		if (!Watch.IsAdmin())
+		// 권한 확인을 거절하면 일반 권한 창이라도 띄운다.
+		if (!Watch.IsAdmin() && Watch.RelaunchElevated())
 		{
-			try
-			{
-				Process.Start(new ProcessStartInfo(Application.ExecutablePath)
-				{
-					UseShellExecute = true,
-					Verb = "runas"
-				});
-				return;
-			}
-			catch
-			{
-				// 권한 확인을 거절하면 일반 권한 창이라도 띄운다
-			}
+			return;
 		}
 		if (tray != null && !watching)
 		{
@@ -713,7 +696,7 @@ internal class MainForm : Form
 		}, 0, 0);
 		txtPath = new TextBox
 		{
-			Text = "C:\\MGAME\\귀혼\\game.exe",
+			Text = DefaultExe,
 			Dock = DockStyle.Fill,
 			Margin = new Padding(0, 3, 6, 0)
 		};
@@ -756,7 +739,7 @@ internal class MainForm : Form
 			Margin = new Padding(0, 2, 0, 10)
 		};
 		root.Controls.Add(lblFile, 0, 1);
-		grid = new TableLayoutPanel
+		TableLayoutPanel grid = new TableLayoutPanel
 		{
 			Dock = DockStyle.Top,
 			AutoSize = true,
@@ -849,7 +832,7 @@ internal class MainForm : Form
 			Margin = new Padding(0, 0, 8, 0)
 		};
 		tableLayoutPanel2.Controls.Add(lblStatus, 0, 0);
-		btnTray = new Button
+		Button btnTray = new Button
 		{
 			Text = "트레이로",
 			AutoSize = true,
@@ -861,7 +844,7 @@ internal class MainForm : Form
 			HideToTray();
 		};
 		tableLayoutPanel2.Controls.Add(btnTray, 1, 0);
-		btnLog = new Button
+		Button btnLog = new Button
 		{
 			Text = "튕김 기록",
 			AutoSize = true,
@@ -1038,14 +1021,7 @@ internal class MainForm : Form
 		Dictionary<FixRow, bool> applied = new Dictionary<FixRow, bool>();
 		foreach (FixRow row in rows)
 		{
-			bool flag2 = false;
-			try
-			{
-				flag2 = flag && row.IsApplied(exePath);
-			}
-			catch
-			{
-			}
+			bool flag2 = flag && IsApplied(row, exePath);
 			applied[row] = flag2;
 			row.Status.Text = (flag2 ? "●  적용됨" : "○  미적용");
 			row.Status.ForeColor = (flag2 ? Green : Gray);
@@ -1076,14 +1052,7 @@ internal class MainForm : Form
 		List<FixRow> toRevert = new List<FixRow>();
 		foreach (FixRow row in rows)
 		{
-			bool isApplied = false;
-			try
-			{
-				isApplied = row.IsApplied(ExePath);
-			}
-			catch
-			{
-			}
+			bool isApplied = IsApplied(row, ExePath);
 			if (row.Check.Checked && !isApplied)
 			{
 				toApply.Add(row);
@@ -1153,6 +1122,19 @@ internal class MainForm : Form
 		if (list3.Count > 0)
 		{
 			MessageBox.Show(this, string.Join("\n", list3), "적용 실패", MessageBoxButtons.OK, MessageBoxIcon.Hand);
+		}
+	}
+
+	// 적용 여부를 읽다가 실패하면(파일 없음·권한 등) 적용 안 된 것으로 본다.
+	private static bool IsApplied(FixRow row, string exePath)
+	{
+		try
+		{
+			return row.IsApplied(exePath);
+		}
+		catch
+		{
+			return false;
 		}
 	}
 
@@ -1356,15 +1338,8 @@ internal class MainForm : Form
 		List<string> list = new List<string>();
 		foreach (FixRow row in rows)
 		{
-			bool flag = false;
-			try
-			{
-				flag = row.IsApplied(ExePath);
-			}
-			catch
-			{
-			}
-			list.Add(row.Title.Replace(" (선택)", "") + (flag ? " O" : " X"));
+			bool flag = IsApplied(row, ExePath);
+			list.Add(ShortTitle(row) + (flag ? " O" : " X"));
 		}
 		return string.Join(" / ", list);
 	}
@@ -1373,14 +1348,14 @@ internal class MainForm : Form
 	{
 		try
 		{
-			Process.Start(new ProcessStartInfo("https://open.kakao.com/o/sj9j7gJi")
+			Process.Start(new ProcessStartInfo(OpenChatUrl)
 			{
 				UseShellExecute = true
 			});
 		}
 		catch (Exception ex)
 		{
-			MessageBox.Show(this, "브라우저를 열지 못했습니다. 주소를 직접 여세요:\nhttps://open.kakao.com/o/sj9j7gJi\n\n" + ex.Message, Text, MessageBoxButtons.OK, MessageBoxIcon.Exclamation);
+			MessageBox.Show(this, "브라우저를 열지 못했습니다. 주소를 직접 여세요:\n" + OpenChatUrl + "\n\n" + ex.Message, Text, MessageBoxButtons.OK, MessageBoxIcon.Exclamation);
 		}
 	}
 }

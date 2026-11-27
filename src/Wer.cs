@@ -88,8 +88,7 @@ public static class Wer
 		}
 		WerReport werReport = new WerReport
 		{
-			Time = directoryInfo.LastWriteTime,
-			Folder = directoryInfo.FullName
+			Time = directoryInfo.LastWriteTime
 		};
 		string folderPath3 = Environment.GetFolderPath(Environment.SpecialFolder.Windows);
 		array = File.ReadAllLines(Path.Combine(directoryInfo.FullName, "Report.wer"));

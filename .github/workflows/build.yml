@@ -10,18 +10,26 @@ on:
   pull_request:
   workflow_dispatch:
 
+# 기본은 읽기만. 쓰기 권한은 필요한 작업(job)에만 준다.
 permissions:
-  contents: write       # Releases에 올리는 데 필요
-  id-token: write       # 빌드 출처 증명(attestation)에 서명하는 데 필요
-  attestations: write   # 빌드 출처 증명을 저장소에 보관하는 데 필요
+  contents: read
 
+# 외부 액션은 태그 대신 커밋 번호로 고정한다(태그가 다른 코드로 바뀌어도 그대로 쓰지 않게). 뒤의 주석이 그 커밋의 태그.
 jobs:
   build:
     runs-on: windows-latest
+    permissions:
+      contents: read
+      id-token: write       # 빌드 출처 증명(attestation)에 서명하는 데 필요
+      attestations: write   # 빌드 출처 증명을 저장소에 보관하는 데 필요
+    outputs:
+      sha256: ${{ steps.hash.outputs.sha256 }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
 
-      - uses: actions/setup-dotnet@v4
+      - uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4.3.1
         with:
           dotnet-version: '8.0.x'
 
@@ -59,12 +67,12 @@ jobs:
       # PR 빌드(남의 포크 포함)는 서명 권한이 없으므로 건너뛴다.
       - name: 빌드 출처 증명
         if: github.event_name != 'pull_request'
-        uses: actions/attest-build-provenance@v2
+        uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be # v2.4.0
         with:
           subject-path: dist/GhostFix.exe
 
       - name: exe 올리기 (Actions 탭)
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: GhostFix
           path: |
@@ -72,13 +80,25 @@ jobs:
             dist/GhostFix.exe.sha256
           if-no-files-found: error
 
-      - name: Releases에 올리기 (태그일 때만)
-        if: startsWith(github.ref, 'refs/tags/v')
+  # Releases에 올리기(태그일 때만). 저장소 쓰기 권한은 이 작업에만 준다.
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write       # Releases에 올리는 데 필요
+    steps:
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: GhostFix
+          path: dist
+
+      - name: Releases에 올리기
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
-          SHA256: ${{ steps.hash.outputs.sha256 }}
+          SHA256: ${{ needs.build.outputs.sha256 }}
         run: |
           notes=$(printf '**GhostFix.exe SHA-256**\n```\n%s\n```\nPowerShell에서 `Get-FileHash GhostFix.exe`로 나온 값과 같은지 확인하세요(대소문자 무관).\n' "$SHA256")
           gh release create "$GITHUB_REF_NAME" dist/GhostFix.exe dist/GhostFix.exe.sha256 \
-            --title "GhostFix $GITHUB_REF_NAME" --notes "$notes" --generate-notes
+            -R "$GITHUB_REPOSITORY" --title "GhostFix $GITHUB_REF_NAME" --notes "$notes" --generate-notes

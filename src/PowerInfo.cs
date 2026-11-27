@@ -49,7 +49,7 @@ public static class PowerInfo
 		}
 		try
 		{
-			SetThreadExecutionState(on ? 2147483649u : 2147483648u);
+			SetThreadExecutionState(on ? (ES_CONTINUOUS | ES_SYSTEM_REQUIRED) : ES_CONTINUOUS);
 			awake = on;
 		}
 		catch

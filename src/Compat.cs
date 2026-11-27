@@ -14,7 +14,7 @@ public static class Compat
 
 	public static string[] Get(string exe)
 	{
-		using RegistryKey registryKey = Registry.CurrentUser.OpenSubKey("Software\\Microsoft\\Windows NT\\CurrentVersion\\AppCompatFlags\\Layers");
+		using RegistryKey registryKey = Registry.CurrentUser.OpenSubKey(LayersKey);
 		string text = ((registryKey == null) ? null : (registryKey.GetValue(exe) as string));
 		if (string.IsNullOrWhiteSpace(text))
 		{
@@ -27,7 +27,7 @@ public static class Compat
 
 	private static void Set(string exe, string[] tokens)
 	{
-		using RegistryKey registryKey = Registry.CurrentUser.CreateSubKey("Software\\Microsoft\\Windows NT\\CurrentVersion\\AppCompatFlags\\Layers");
+		using RegistryKey registryKey = Registry.CurrentUser.CreateSubKey(LayersKey);
 		if (tokens.Length == 0)
 		{
 			registryKey.DeleteValue(exe, throwOnMissingValue: false);

@@ -65,17 +65,7 @@ internal static class Program
 			{
 				return;
 			}
-			try
-			{
-				Process.Start(new ProcessStartInfo(Application.ExecutablePath)
-				{
-					UseShellExecute = true,
-					Verb = "runas"
-				});
-			}
-			catch
-			{
-			}
+			Watch.RelaunchElevated();
 			return;
 		}
 		Mutex instance;
@@ -104,12 +94,12 @@ internal static class Program
 			{
 				if (admin)
 				{
-					// 1.0.0 감시 프로세스가 떠 있으면 끄라고 알리고, 시작 프로그램 등록을 작업 스케줄러로 옮긴다.
+					// 1.0.0 감시 프로세스가 떠 있으면 끄라고 알리고, 예전 방식의 자동 시작·저장 파일을 새 방식으로 옮긴다.
 					if (Exists(Watch.OldTrayMutex))
 					{
 						StopOldTray();
 					}
-					Watch.MigrateLegacy();
+					Watch.Migrate();
 				}
 				using EventWaitHandle showSignal = CreateSignal(Watch.ShowEvent);
 				using EventWaitHandle quitSignal = CreateSignal(Watch.QuitEvent);
