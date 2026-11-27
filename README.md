@@ -31,7 +31,9 @@ gh attestation verify GhostFix.exe -R joongosearchme/gwihon_ghostfix
 GhostFix.exe에는 아직 코드 서명이 없어서, 받거나 처음 실행할 때 브라우저·Windows·백신이 경고를 띄울 수 있다. 위의 SHA-256 값이 같으면 이 저장소에서 빌드한 원본이다.
 
 - **브라우저가 막는 경우**: 대개는 그냥 받아지지만, 가끔 크롬·엣지가 "흔히 다운로드되지 않는 파일"이라며 경고하거나 보관을 막을 수 있다. 그러면 다운로드 목록에서 그 파일의 메뉴를 열어 "보관"(엣지는 "유지")을 고른다.
-- **"Windows의 PC 보호" 파란 창**: "추가 정보"를 누르면 나오는 "실행" 버튼을 누른다.
+- **"Windows의 PC 보호" 창**: "추가 정보"를 누르면 나오는 "실행" 버튼을 누른다. 한 번 실행하면 같은 파일에서는 다시 뜨지 않는다.
+
+  <img src="docs/images/smartscreen-1.png" width="380" alt="Windows의 PC 보호 첫 화면: 추가 정보를 누른다"> <img src="docs/images/smartscreen-2.png" width="380" alt="추가 정보를 누른 뒤: 실행을 누른다">
 - **"알 수 없는 게시자" 노란 창**: 관리자 권한을 묻는 창이다. "예"를 누른다. 로그인할 때 자동으로 시작되는 감시는 작업 스케줄러로 돌기 때문에 이 창이 뜨지 않는다.
 - **백신이 잡는 경우**: GhostFix는 `game.exe`를 고치고(LAA) 레지스트리와 작업 스케줄러를 바꾼다. 서명이 없으면 이런 동작 때문에 백신이 악성으로 잘못 판단할 수 있다. 해시가 같은 파일이면 백신에서 복원하거나 예외로 두면 된다. Windows Defender가 잡았다면 [Microsoft 오진 신고](https://www.microsoft.com/wdsi/filesubmission)에 파일을 올려 주면 다른 사람도 덜 막힌다.
 
