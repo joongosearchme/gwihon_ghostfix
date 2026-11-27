@@ -14,10 +14,48 @@ internal static class Program
 	// 프로세스는 하나만 띄운다. 감시(트레이)와 설정 창을 같은 프로세스가 맡는다.
 	//   GhostFix.exe          설정 창을 연다. 이미 떠 있으면 그 프로세스에 창을 띄우라고 알리고 끝난다.
 	//   GhostFix.exe --tray   로그인 때 작업 스케줄러가 실행. 창 없이 트레이에서 감시만 한다.
+	private const string Net48Url = "https://dotnet.microsoft.com/download/dotnet-framework/net48";
+
+	// 설치된 .NET Framework 4.x 버전이 4.8(Release 528040) 이상인지. 읽지 못하면 막지 않는다.
+	private static bool HasNet48()
+	{
+		try
+		{
+			using (Microsoft.Win32.RegistryKey key = Microsoft.Win32.Registry.LocalMachine.OpenSubKey("SOFTWARE\\Microsoft\\NET Framework Setup\\NDP\\v4\\Full"))
+			{
+				object value = key?.GetValue("Release");
+				return !(value is int release) || release >= 528040;
+			}
+		}
+		catch
+		{
+			return true;
+		}
+	}
+
 	[STAThread]
 	private static void Main(string[] args)
 	{
 		bool startHidden = args.Length != 0 && args[0] == "--tray";
+		// .NET Framework 4.8 보다 낮으면(배포는 exe 하나라 Windows가 대신 알려 주지 않는다) 화면 배율 등
+		// 4.7 이후 기능에서 꺼지므로, 그 전에 설치 안내를 띄우고 끝낸다. 이 검사는 4.8 기능을 쓰지 않는다.
+		if (!HasNet48())
+		{
+			if (!startHidden && MessageBox.Show("GhostFix를 실행하려면 .NET Framework 4.8이 필요합니다.\n이 PC에는 더 낮은 버전이 설치되어 있습니다.\n\nMicrosoft 공식 설치 페이지를 열까요?\n설치하고 PC를 다시 시작한 뒤 GhostFix를 다시 실행하세요.", "GhostFix", MessageBoxButtons.YesNo, MessageBoxIcon.Exclamation) == DialogResult.Yes)
+			{
+				try
+				{
+					Process.Start(new ProcessStartInfo(Net48Url)
+					{
+						UseShellExecute = true
+					});
+				}
+				catch
+				{
+				}
+			}
+			return;
+		}
 		bool admin = Watch.IsAdmin();
 		// --tray 는 1.0.0 이 시작 프로그램(Run)에 등록한 경우 일반 권한으로 올 수 있다. 그때는 그대로 감시만 한다.
 		if (!admin && !startHidden)

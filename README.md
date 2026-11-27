@@ -37,7 +37,9 @@ GhostFix.exe에는 아직 코드 서명이 없어서, 받거나 처음 실행할
 - **"알 수 없는 게시자" 노란 창**: 관리자 권한을 묻는 창이다. "예"를 누른다. 로그인할 때 자동으로 시작되는 감시는 작업 스케줄러로 돌기 때문에 이 창이 뜨지 않는다.
 - **백신이 잡는 경우**: GhostFix는 `game.exe`를 고치고(LAA) 레지스트리와 작업 스케줄러를 바꾼다. 서명이 없으면 이런 동작 때문에 백신이 악성으로 잘못 판단할 수 있다. 해시가 같은 파일이면 백신에서 복원하거나 예외로 두면 된다. Windows Defender가 잡았다면 [Microsoft 오진 신고](https://www.microsoft.com/wdsi/filesubmission)에 파일을 올려 주면 다른 사람도 덜 막힌다.
 
-필요 환경: Windows 10/11, .NET Framework 4.8 (Windows 10 1903 이후에는 기본으로 들어 있다).
+필요 환경: Windows 10/11, .NET Framework 4.8 (Windows 11과 Windows 10 1903 이후에는 기본으로 들어 있다).
+
+.NET Framework 4.8이 없으면 실행할 때 설치 안내 창이 뜬다. "예"를 누르면 열리는 [Microsoft 공식 설치 페이지](https://dotnet.microsoft.com/download/dotnet-framework/net48)에서 "Runtime"을 받아 설치하고 PC를 다시 시작한 뒤 GhostFix를 다시 실행한다. 아무 창 없이 켜지지 않을 때도 같은 페이지에서 설치하면 된다.
 
 ## 빌드
 
