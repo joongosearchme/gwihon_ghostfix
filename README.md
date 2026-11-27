@@ -20,6 +20,12 @@
 
 받은 파일이 이 저장소에서 빌드한 원본인지 확인하려면, exe가 있는 폴더에서 PowerShell로 `Get-FileHash GhostFix.exe`를 실행해 나온 값을 Releases 설명의 SHA-256 값(또는 함께 올린 `GhostFix.exe.sha256`)과 비교한다. 대소문자는 달라도 된다.
 
+해시는 같은 Releases 페이지에 있어서, 저장소 자체가 털리면 exe와 함께 바뀔 수 있다. 더 확실히 확인하려면 빌드 출처 증명을 본다. 자동 빌드는 exe마다 "이 저장소의 어느 커밋에서 자동 빌드로 만들었는지"를 GitHub이 서명한 증명으로 남긴다(1.1.0 배포본에는 없고 그다음 빌드부터). [GitHub CLI](https://cli.github.com/)를 깔고 `gh auth login`으로 로그인한 뒤 exe가 있는 폴더에서 다음을 실행해 `Verification succeeded`가 나오면 된다. 증명 목록은 저장소의 [Attestations](../../attestations) 화면에서도 볼 수 있다.
+
+```
+gh attestation verify GhostFix.exe -R joongosearchme/gwihon_ghostfix
+```
+
 ### 처음 받아 실행할 때 나오는 경고
 
 GhostFix.exe에는 아직 코드 서명이 없어서, 받거나 처음 실행할 때 브라우저·Windows·백신이 경고를 띄울 수 있다. 위의 SHA-256 값이 같으면 이 저장소에서 빌드한 원본이다.
