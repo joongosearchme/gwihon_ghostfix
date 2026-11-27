@@ -14,7 +14,7 @@
 
   <!-- exe 속성(파일 정보)에 보이는 값. v1.1.1 같은 태그로 배포하면 버전은 그 번호로 바뀐다 -->
   <PropertyGroup>
-    <Version>1.1.0</Version>
+    <Version>1.2.0</Version>
     <AssemblyTitle>GhostFix</AssemblyTitle>
     <Product>GhostFix</Product>
     <Description>귀혼 game.exe LAA / 호환성 / 자동 유지 관리 설정 도구</Description>
