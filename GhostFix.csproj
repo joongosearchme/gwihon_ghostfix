@@ -8,10 +8,19 @@
     <LangVersion>11.0</LangVersion>
     <Nullable>disable</Nullable>
     <ImplicitUsings>disable</ImplicitUsings>
-    <!-- 버전·제품 정보는 Properties/AssemblyInfo.cs 에 있다 -->
-    <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
     <ApplicationIcon>app.ico</ApplicationIcon>
     <ApplicationManifest>app.manifest</ApplicationManifest>
+  </PropertyGroup>
+
+  <!-- exe 속성(파일 정보)에 보이는 값. 버전은 build.cmd 1.0.1 처럼 빌드할 때 바꿀 수 있다 -->
+  <PropertyGroup>
+    <Version>1.0.0</Version>
+    <AssemblyTitle>GhostFix</AssemblyTitle>
+    <Product>GhostFix</Product>
+    <Description>귀혼 game.exe LAA / 호환성 / 자동 유지 관리 설정 도구</Description>
+    <Company>joongosearch.me</Company>
+    <Copyright>© 2026 joongosearch.me</Copyright>
+    <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
   </PropertyGroup>
 
   <ItemGroup>

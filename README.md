@@ -10,13 +10,13 @@
 
 ## 빌드
 
-.NET SDK(6 이상)가 있으면 Windows·리눅스 어디서나 빌드된다. 결과물은 .NET Framework 4.8용이다.
+GitHub에 푸시하면 자동으로 빌드된다(`.github/workflows/build.yml`).
 
-```
-dotnet build -c Release
-```
+- **테스트용 exe**: 저장소의 Actions 탭 → 해당 실행 → 아래 Artifacts의 `GhostFix`를 내려받는다(zip 안에 exe).
+- **배포**: `v1.0.1` 같은 태그를 푸시하면 그 번호가 exe 버전으로 들어가고 Releases에 `GhostFix.exe`가 올라간다.
+- 버전·제품 정보는 `GhostFix.csproj`에 있다.
 
-결과: `bin/Release/net48/GhostFix.exe`. Visual Studio 2022에서 `GhostFix.csproj`를 열어도 된다.
+직접 빌드하려면 .NET SDK(6 이상)를 깔고 `dotnet build -c Release` (결과: `bin/Release/net48/GhostFix.exe`). 결과물은 .NET Framework 4.8용이다.
 
 ## 구성
 

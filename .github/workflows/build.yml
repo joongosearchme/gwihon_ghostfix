@@ -1,0 +1,52 @@
+# GhostFix 자동 빌드
+# - 어느 브랜치든 푸시하면 Windows 서버에서 빌드하고, Actions 탭의 실행 결과 아래 "Artifacts"에 GhostFix.exe를 올린다.
+# - v1.0.1 같은 태그를 올리면 그 번호를 exe 버전으로 넣어 빌드하고 Releases에 올린다.
+name: build
+
+on:
+  push:
+    branches: ['**']
+    tags: ['v*']
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: write   # Releases에 올리는 데 필요
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: 버전 정하기
+        id: ver
+        shell: bash
+        run: |
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            echo "args=-p:Version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+          else
+            echo "args=" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: 빌드
+        shell: bash
+        run: dotnet build GhostFix.csproj -c Release -nologo -o dist ${{ steps.ver.outputs.args }}
+
+      - name: exe 올리기 (Actions 탭)
+        uses: actions/upload-artifact@v4
+        with:
+          name: GhostFix
+          path: dist/GhostFix.exe
+          if-no-files-found: error
+
+      - name: Releases에 올리기 (태그일 때만)
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" dist/GhostFix.exe --title "GhostFix $GITHUB_REF_NAME" --generate-notes
