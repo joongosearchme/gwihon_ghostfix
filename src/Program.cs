@@ -158,10 +158,17 @@ internal static class Program
 		{
 			return;
 		}
-		int self = Process.GetCurrentProcess().Id;
+		int self;
+		int session;
+		using (Process current = Process.GetCurrentProcess())
+		{
+			self = current.Id;
+			session = current.SessionId;
+		}
 		try
 		{
-			using ManagementObjectSearcher searcher = new ManagementObjectSearcher("SELECT ProcessId, CommandLine FROM Win32_Process WHERE Name = 'GhostFix.exe'");
+			// 이 로그인 세션의 것만 끈다(한 PC를 여러 Windows 계정이 같이 쓰면 다른 계정의 GhostFix 까지 끄지 않게).
+			using ManagementObjectSearcher searcher = new ManagementObjectSearcher("SELECT ProcessId, CommandLine FROM Win32_Process WHERE Name = 'GhostFix.exe' AND SessionId = " + session);
 			foreach (ManagementBaseObject item in searcher.Get())
 			{
 				using (item)

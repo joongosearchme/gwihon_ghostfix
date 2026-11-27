@@ -36,16 +36,30 @@ jobs:
       - name: 버전 정하기
         id: ver
         shell: bash
+        # 태그 이름은 숫자와 점(v1.2.3)만 받는다. 다른 글자가 든 태그가 빌드 명령에 섞여 들어가지 않게 한다.
         run: |
           if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
-            echo "args=-p:Version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+            ver="${GITHUB_REF_NAME#v}"
+            if [[ ! "$ver" =~ ^[0-9]+(\.[0-9]+){0,3}$ ]]; then
+              echo "::error::태그 이름은 v1.2.3 형식이어야 합니다: $GITHUB_REF_NAME"
+              exit 1
+            fi
+            echo "version=$ver" >> "$GITHUB_OUTPUT"
           else
-            echo "args=" >> "$GITHUB_OUTPUT"
+            echo "version=" >> "$GITHUB_OUTPUT"
           fi
 
+      # 값은 워크플로 표현식으로 명령 글에 바로 넣지 않고 환경 변수로 넘긴다.
       - name: 빌드
         shell: bash
-        run: dotnet build GhostFix.csproj -c Release -nologo -o dist ${{ steps.ver.outputs.args }}
+        env:
+          VERSION: ${{ steps.ver.outputs.version }}
+        run: |
+          args=()
+          if [[ -n "$VERSION" ]]; then
+            args+=("-p:Version=$VERSION")
+          fi
+          dotnet build GhostFix.csproj -c Release -nologo -o dist "${args[@]}"
 
       # 받은 exe가 이 빌드 결과와 같은지 확인할 수 있게 SHA-256 해시를 만든다.
       # GhostFix.exe.sha256 파일로 같이 올리고, 실행 요약 화면과 Releases 설명에도 적는다.

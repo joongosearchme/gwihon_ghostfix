@@ -5,7 +5,9 @@ using System.Drawing;
 using System.IO;
 using System.Linq;
 using System.Media;
+using System.Runtime.InteropServices;
 using System.Text;
+using System.Text.RegularExpressions;
 using System.Threading;
 using System.Windows.Forms;
 
@@ -421,7 +423,7 @@ internal class MainForm : Form
 		}
 		if (running && (gameProc == null || flag))
 		{
-			Process[] processesByName = Process.GetProcessesByName(Path.GetFileNameWithoutExtension(ExePath));
+			Process[] processesByName = GameProcesses();
 			if (processesByName.Length == 0)
 			{
 				return;
@@ -967,11 +969,73 @@ internal class MainForm : Form
 	{
 		try
 		{
-			return Process.GetProcessesByName(Path.GetFileNameWithoutExtension(ExePath)).Length != 0;
+			return GameProcesses().Length != 0;
 		}
 		catch
 		{
 			return false;
+		}
+	}
+
+	// 실행 중인 귀혼 프로세스. 이름이 같아도 고른 경로와 다른 폴더의 exe(다른 게임의 game.exe 등)는 뺀다.
+	// 경로를 읽지 못하면(게임 보안 프로그램이 막는 경우 등) 예전처럼 이름만 보고 귀혼으로 본다.
+	private Process[] GameProcesses()
+	{
+		string exePath = ExePath;
+		Process[] processes = Process.GetProcessesByName(Path.GetFileNameWithoutExtension(exePath));
+		string full;
+		try
+		{
+			full = Path.GetFullPath(exePath);
+		}
+		catch
+		{
+			return processes;
+		}
+		List<Process> list = new List<Process>();
+		foreach (Process process in processes)
+		{
+			string image = ImagePath(process.Id);
+			if (image == null || string.Equals(image, full, StringComparison.OrdinalIgnoreCase))
+			{
+				list.Add(process);
+			}
+			else
+			{
+				process.Dispose();
+			}
+		}
+		return list.ToArray();
+	}
+
+	private const uint PROCESS_QUERY_LIMITED_INFORMATION = 0x1000u;
+
+	[DllImport("kernel32.dll", SetLastError = true)]
+	private static extern IntPtr OpenProcess(uint access, bool inheritHandle, int processId);
+
+	[DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+	private static extern bool QueryFullProcessImageName(IntPtr process, uint flags, StringBuilder name, ref int size);
+
+	[DllImport("kernel32.dll")]
+	private static extern bool CloseHandle(IntPtr handle);
+
+	// 프로세스의 exe 전체 경로. 32·64비트 어느 쪽이든 읽힌다. 읽지 못하면 null.
+	private static string ImagePath(int processId)
+	{
+		IntPtr handle = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, inheritHandle: false, processId);
+		if (handle == IntPtr.Zero)
+		{
+			return null;
+		}
+		try
+		{
+			StringBuilder stringBuilder = new StringBuilder(1024);
+			int size = stringBuilder.Capacity;
+			return QueryFullProcessImageName(handle, 0u, stringBuilder, ref size) ? stringBuilder.ToString(0, size) : null;
+		}
+		finally
+		{
+			CloseHandle(handle);
 		}
 	}
 
@@ -1283,7 +1347,7 @@ internal class MainForm : Form
 				{
 					text = text + "\r\n" + extra;
 				}
-				Clipboard.SetText(text);
+				Clipboard.SetText(MaskUserProfile(text));
 				info.Text = "복사됨 — 오픈채팅에 붙여넣으세요.";
 				info.ForeColor = Green;
 			}
@@ -1342,6 +1406,18 @@ internal class MainForm : Form
 			list.Add(ShortTitle(row) + (flag ? " O" : " X"));
 		}
 		return string.Join(" / ", list);
+	}
+
+	// 오픈채팅에 붙여넣을 기록에서 사용자 폴더 경로(C:\Users\<Windows 사용자 이름>)를 %USERPROFILE%로 가린다.
+	// 경로 뒤에 글자가 바로 이어지면(C:\Users\이름2 처럼 다른 폴더) 바꾸지 않는다.
+	private static string MaskUserProfile(string text)
+	{
+		string profile = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile).TrimEnd('\\');
+		if (profile.Length < 4)
+		{
+			return text;
+		}
+		return Regex.Replace(text, Regex.Escape(profile) + "(?!\\w)", "%USERPROFILE%", RegexOptions.IgnoreCase);
 	}
 
 	private void OpenChat()
