@@ -1035,6 +1035,7 @@ internal class MainForm : Form
 				lblFile.ForeColor = Red;
 			}
 		}
+		Dictionary<FixRow, bool> applied = new Dictionary<FixRow, bool>();
 		foreach (FixRow row in rows)
 		{
 			bool flag2 = false;
@@ -1045,8 +1046,19 @@ internal class MainForm : Form
 			catch
 			{
 			}
+			applied[row] = flag2;
 			row.Status.Text = (flag2 ? "●  적용됨" : "○  미적용");
 			row.Status.ForeColor = (flag2 ? Green : Gray);
+		}
+		// 체크박스를 실제 상태에 맞춘다. 아무것도 적용되지 않았으면(처음 실행) 추천 항목을 체크해 둔다.
+		// 파일이 올바르지 않으면 체크는 그대로 둔다.
+		if (flag)
+		{
+			bool anyApplied = applied.Values.Any((bool x) => x);
+			foreach (FixRow row2 in rows)
+			{
+				row2.Check.Checked = (anyApplied ? applied[row2] : row2.DefaultOn);
+			}
 		}
 		btnApply.Enabled = flag;
 		btnRevert.Enabled = flag;
@@ -1059,34 +1071,94 @@ internal class MainForm : Form
 			MessageBox.Show(this, "귀혼이 실행 중입니다. 게임을 끄고 다시 적용하세요.", Text, MessageBoxButtons.OK, MessageBoxIcon.Exclamation);
 			return;
 		}
+		// 화면의 체크 상태가 곧 PC 상태가 되게 한다: 체크한 것은 적용, 적용돼 있는데 체크를 푼 것은 되돌림.
+		List<FixRow> toApply = new List<FixRow>();
+		List<FixRow> toRevert = new List<FixRow>();
+		foreach (FixRow row in rows)
+		{
+			bool isApplied = false;
+			try
+			{
+				isApplied = row.IsApplied(ExePath);
+			}
+			catch
+			{
+			}
+			if (row.Check.Checked && !isApplied)
+			{
+				toApply.Add(row);
+			}
+			else if (!row.Check.Checked && isApplied)
+			{
+				toRevert.Add(row);
+			}
+		}
+		if (toApply.Count == 0 && toRevert.Count == 0)
+		{
+			lblStatus.Text = "바꿀 것이 없습니다. 체크한 항목이 모두 적용되어 있습니다.";
+			lblStatus.ForeColor = Green;
+			return;
+		}
+		if (toRevert.Count > 0 && MessageBox.Show(this, "체크를 푼 다음 항목을 원래대로 되돌립니다.\n\n" + string.Join("\n", toRevert.Select((FixRow x) => "· " + ShortTitle(x))) + "\n\n계속할까요?", Text, MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes)
+		{
+			return;
+		}
 		List<string> list = new List<string>();
 		List<string> list2 = new List<string>();
 		List<string> list3 = new List<string>();
-		foreach (FixRow item in rows.Where((FixRow x) => x.Check.Checked))
+		foreach (FixRow item in toApply)
 		{
 			try
 			{
-				if (item.IsApplied(ExePath))
-				{
-					list2.Add(item.Title.Replace(" (선택)", ""));
-					continue;
-				}
 				item.Apply(ExePath);
-				list.Add(item.Title.Replace(" (선택)", ""));
+				list.Add(ShortTitle(item));
 			}
 			catch (Exception ex)
 			{
 				list3.Add(item.Title + ": " + ex.Message);
 			}
 		}
+		foreach (FixRow item2 in toRevert)
+		{
+			try
+			{
+				item2.Revert(ExePath);
+				// 되돌리기가 조용히 실패하는 경우(예: LAA 백업 파일이 없음)를 잡는다.
+				if (item2.IsApplied(ExePath))
+				{
+					list3.Add(item2.Title + ": 원래대로 되돌리지 못했습니다" + (item2.Title.StartsWith("LAA") ? " (백업 파일 game.exe.laa-backup 이 없습니다)" : "") + ".");
+				}
+				else
+				{
+					list2.Add(ShortTitle(item2));
+				}
+			}
+			catch (Exception ex2)
+			{
+				list3.Add(item2.Title + ": " + ex2.Message);
+			}
+		}
 		RefreshStatus();
-		string text = ((list.Count == 0 && list3.Count == 0) ? "이미 모두 적용되어 있습니다." : ((list.Count <= 0) ? "적용 실패" : ("적용 완료: " + string.Join(", ", list) + ((list2.Count > 0) ? ("  (이미 적용됨: " + string.Join(", ", list2) + ")") : ""))));
-		lblStatus.Text = text;
+		List<string> list4 = new List<string>();
+		if (list.Count > 0)
+		{
+			list4.Add("적용: " + string.Join(", ", list));
+		}
+		if (list2.Count > 0)
+		{
+			list4.Add("되돌림: " + string.Join(", ", list2));
+		}
+		lblStatus.Text = ((list4.Count > 0) ? string.Join("  ·  ", list4) : "적용 실패");
 		lblStatus.ForeColor = ((list3.Count > 0) ? Red : Green);
 		if (list3.Count > 0)
 		{
 			MessageBox.Show(this, string.Join("\n", list3), "적용 실패", MessageBoxButtons.OK, MessageBoxIcon.Hand);
 		}
+	}
+
+	private static string ShortTitle(FixRow row)
+	{
+		return row.Title.Replace(" (선택)", "");
 	}
 
 	private void RevertAll()
