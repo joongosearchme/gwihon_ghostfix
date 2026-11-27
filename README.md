@@ -18,6 +18,8 @@
 2. 받은 `GhostFix.exe`를 실행한다. 관리자 권한이 필요하다. "게임 중 절전 방지와 기록"을 켜면 exe를 `C:\Program Files\GhostFix`에 복사해 두고, 로그인할 때는 그 복사본이 실행된다(받은 파일은 지우거나 옮겨도 된다). 새 버전을 받아 실행하면 복사본도 새 버전으로 바뀐다.
 3. `game.exe` 경로를 확인하고, 원하는 항목을 체크한 뒤 "적용"을 누른다.
 
+**새 버전 알림**: 처음 설정 창을 열 때 "새 버전이 나오면 알려 드릴까요?"를 묻는다. "예"를 고르면 설정 창을 열 때 새 버전이 있는지 확인하고(확인에 성공하면 GhostFix가 떠 있는 동안 12시간은 다시 확인하지 않는다), 있으면 설치 안내 창을 띄워 내려받기 페이지(Releases)를 열어 준다. 창 아래쪽 "새 버전 알림"에서 자동 확인을 켜고 끌 수 있고, "지금 확인" 버튼으로 언제든 직접 확인할 수 있다.
+
 받은 파일이 이 저장소에서 빌드한 원본인지 확인하려면, exe가 있는 폴더에서 PowerShell로 `Get-FileHash GhostFix.exe`를 실행해 나온 값을 Releases 설명의 SHA-256 값(또는 함께 올린 `GhostFix.exe.sha256`)과 비교한다. 대소문자는 달라도 된다.
 
 해시는 같은 Releases 페이지에 있어서, 저장소 자체가 털리면 exe와 함께 바뀔 수 있다. 더 확실히 확인하려면 빌드 출처 증명을 본다. 자동 빌드는 exe마다 "이 저장소의 어느 커밋에서 자동 빌드로 만들었는지"를 GitHub이 서명한 증명으로 남긴다(1.1.0 배포본에는 없고 그다음 빌드부터). [GitHub CLI](https://cli.github.com/)를 깔고 `gh auth login`으로 로그인한 뒤 exe가 있는 폴더에서 다음을 실행해 `Verification succeeded`가 나오면 된다. 증명 목록은 저장소의 [Attestations](../../attestations) 화면에서도 볼 수 있다.
@@ -65,6 +67,7 @@ GitHub에 푸시하면 자동으로 빌드된다(`.github/workflows/build.yml`).
 - `src/Nearby.cs` — 튕긴 시각 앞뒤의 Windows 이벤트 로그
 - `src/TcpInfo.cs` — 게임 접속(TCP) 상태
 - `src/PowerInfo.cs` — 절전 설정, 충돌 가능성 있는 프로그램(VPN·백신·Killer 네트워크 등)
+- `src/Updater.cs` — 새 버전 확인(GitHub Releases), 브라우저 열기(관리자 권한 GhostFix에서도 탐색기를 거쳐 보통 권한으로. 단 UAC를 끈 관리자 계정은 Windows가 모든 프로그램을 관리자로 실행하므로 예외)
 
 ## 소스 이력
 
@@ -82,7 +85,11 @@ Free code signing provided by [SignPath.io](https://about.signpath.io/), certifi
 ## 개인정보
 
 GhostFix는 사용자가 직접 요청하지 않는 한 어떤 정보도 다른 네트워크 시스템으로 보내지 않는다.
-기록(`session.log` 등)은 이 PC의 `C:\Program Files\GhostFix\data`(1.1.0까지는 `%LOCALAPPDATA%\GhostFix`)에만 저장된다. 네트워크를 쓰는 곳은 사용자가 "오픈채팅 열기" 버튼을 눌렀을 때 브라우저로 카카오 오픈채팅 주소를 여는 것뿐이다.
+기록(`session.log` 등)은 이 PC의 `C:\Program Files\GhostFix\data`(1.1.0까지는 `%LOCALAPPDATA%\GhostFix`)에만 저장된다. 네트워크를 쓰는 곳은 다음뿐이다.
+
+- 사용자가 "오픈채팅 열기" 버튼을 눌렀을 때 브라우저로 카카오 오픈채팅 주소를 연다.
+- 1.1.0 때 자동 시작을 네트워크 공유 폴더의 GhostFix로 등록해 두었다면, 새 버전 GhostFix를 실행할 때마다(이미 떠 있는 GhostFix를 넘겨받을지 정할 때와 자동 시작을 옮길 때) 그 파일이 있는지와 버전을 읽으려고 Windows가 그 공유 폴더에 접속한다(사용자가 등록해 둔 주소이며 GhostFix가 정보를 보내지는 않는다).
+- 새 버전 확인: 사용자가 자동 확인을 허락했거나 "지금 확인" 버튼을 눌렀을 때만 GitHub(`api.github.com`)에 이 저장소의 최신 배포 번호를 묻는다. 요청에는 이 PC의 정보나 기록을 담지 않는다(GitHub은 다른 접속과 마찬가지로 접속 IP를 볼 수 있다). 허락 여부는 `C:\Program Files\GhostFix\data\update-check.txt`에 저장된다.
 
 This program will not transfer any information to other networked systems unless specifically requested by the user or the person installing or operating it.
 

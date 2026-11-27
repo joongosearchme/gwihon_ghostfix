@@ -9,6 +9,7 @@ using System.Runtime.InteropServices;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading;
+using System.Threading.Tasks;
 using System.Windows.Forms;
 
 namespace GhostFix;
@@ -82,6 +83,21 @@ internal class MainForm : Form
 	private DateTime lastWarn = DateTime.MinValue;
 
 	private bool gameLaa;
+
+	// 새 버전 알림
+	private Label updateDetail;
+
+	private Button btnUpdateToggle;
+
+	private DateTime lastUpdateCheck = DateTime.MinValue;
+
+	// 창을 숨긴 사이 확인해서 받은 새 버전(다음에 창을 열 때 보여 줌).
+	private Version hiddenLatest;
+
+	// hiddenLatest 가 "지금 확인" 버튼으로 받은 것인가(아니면 자동 확인: 그사이 자동을 껐으면 보여 주지 않는다).
+	private bool hiddenManual;
+
+	private bool updateBusy;
 
 	private string ExePath => txtPath.Text.Trim();
 
@@ -210,6 +226,161 @@ internal class MainForm : Form
 			}
 		};
 		ipcTimer.Start();
+		// 창이 보일 때 새 버전을 확인한다(처음에는 확인해도 되는지 묻는다). 창이 다 그려진 뒤에 묻도록 미룬다.
+		base.VisibleChanged += delegate
+		{
+			if (base.Visible && !exiting)
+			{
+				BeginInvoke(new Action(AutoCheckUpdate));
+			}
+		};
+	}
+
+	private void RefreshUpdateRow()
+	{
+		if (updateDetail == null)
+		{
+			return;
+		}
+		bool on = Updater.Allowed == true;
+		updateDetail.Text = on ? "켜짐: 설정 창을 열 때 새 버전이 나왔는지 GitHub에 버전 번호만 물어봅니다." : "꺼짐: [지금 확인]을 누를 때만 새 버전을 확인합니다.";
+		btnUpdateToggle.Text = on ? "자동 끄기" : "자동 켜기";
+	}
+
+	// 자동 확인. 처음에는 허락을 묻고, 허락했으면 12시간에 한 번까지만 확인한다.
+	private async void AutoCheckUpdate()
+	{
+		if (updateBusy || exiting || !base.Visible)
+		{
+			return;
+		}
+		// 창을 숨긴 사이 받아 둔 새 버전 소식이 있으면 묻지 않고 그것을 보여 준다.
+		if (hiddenLatest != null && !hiddenManual && Updater.Allowed != true)
+		{
+			hiddenLatest = null;
+		}
+		if (hiddenLatest != null)
+		{
+			Version pending = hiddenLatest;
+			hiddenLatest = null;
+			updateBusy = true;
+			try
+			{
+				ShowNewVersion(pending);
+			}
+			finally
+			{
+				updateBusy = false;
+			}
+			return;
+		}
+		if ((DateTime.UtcNow - lastUpdateCheck).TotalHours < 12.0)
+		{
+			return;
+		}
+		bool? allowed = Updater.Allowed;
+		if (!allowed.HasValue)
+		{
+			updateBusy = true;
+			try
+			{
+				allowed = MessageBox.Show(this, "GhostFix 새 버전이 나오면 알려 드릴까요?\n\n'예'를 누르면 설정 창을 열 때 GitHub에 GhostFix 최신 버전 번호를 물어봅니다.\n이 PC의 정보나 기록은 보내지 않습니다.\n\n나중에 창 아래쪽 '새 버전 알림'에서 바꿀 수 있습니다.", Text, MessageBoxButtons.YesNo, MessageBoxIcon.Question) == DialogResult.Yes;
+				try
+				{
+					Updater.SetAllowed(allowed.Value);
+				}
+				catch (Exception ex)
+				{
+					MessageBox.Show(this, "고른 설정을 저장하지 못해 다음에 다시 묻습니다.\n" + ex.Message, Text, MessageBoxButtons.OK, MessageBoxIcon.Exclamation);
+				}
+				RefreshUpdateRow();
+			}
+			finally
+			{
+				updateBusy = false;
+			}
+		}
+		if (allowed == true)
+		{
+			await CheckUpdate(manual: false);
+		}
+	}
+
+	// 새 버전이 있으면 설치 안내 창을 띄운다. manual(버튼)이면 최신이거나 확인하지 못했을 때도 알려 준다.
+	private async Task CheckUpdate(bool manual)
+	{
+		if (updateBusy)
+		{
+			if (manual)
+			{
+				MessageBox.Show(this, "새 버전을 확인하는 중입니다. 잠시 뒤 다시 눌러 주세요.", Text, MessageBoxButtons.OK, MessageBoxIcon.Information);
+			}
+			return;
+		}
+		updateBusy = true;
+		try
+		{
+			Version latest = await Updater.LatestAsync();
+			if (latest != null)
+			{
+				// 세계 표준시로 잰다(일광 절약 시간 전환으로 간격이 짧아지지 않게).
+				lastUpdateCheck = DateTime.UtcNow;
+			}
+			if (base.IsDisposed || exiting)
+			{
+				return;
+			}
+			Version current = Updater.Current;
+			// 기다리는 사이 창을 숨겼으면, 새 버전 소식은 기억해 두었다가 다음에 창을 열 때 보여 준다(GitHub에 다시 묻지 않는다).
+			if (!base.Visible)
+			{
+				if (latest != null && latest > current)
+				{
+					hiddenLatest = latest;
+					hiddenManual = manual;
+				}
+				return;
+			}
+			if (latest != null && latest > current)
+			{
+				// 자동 확인을 기다리는 사이 자동을 껐으면 보여 주지 않는다.
+				if (manual || Updater.Allowed == true)
+				{
+					ShowNewVersion(latest);
+				}
+			}
+			else if (manual)
+			{
+				if (latest == null)
+				{
+					MessageBox.Show(this, "새 버전을 확인하지 못했습니다. 인터넷 연결을 확인하거나 아래 주소에서 직접 보세요.\n" + Updater.LatestPage, Text, MessageBoxButtons.OK, MessageBoxIcon.Exclamation);
+				}
+				else
+				{
+					MessageBox.Show(this, "최신 버전입니다. (GhostFix " + Updater.Show(current) + ")", Text, MessageBoxButtons.OK, MessageBoxIcon.Information);
+				}
+			}
+		}
+		finally
+		{
+			updateBusy = false;
+		}
+	}
+
+	private void ShowNewVersion(Version latest)
+	{
+		Version current = Updater.Current;
+		if (MessageBox.Show(this, "새 버전 GhostFix " + Updater.Show(latest) + "이(가) 나왔습니다. (지금 " + Updater.Show(current) + ")\n\n고친 문제가 들어 있으니 새 버전을 받아 설치해 주세요.\n받은 GhostFix.exe를 실행하면 로그인 때 자동 시작도 새 버전으로 바뀝니다.\n\n내려받기 페이지(GitHub Releases)를 열까요?", Text, MessageBoxButtons.YesNo, MessageBoxIcon.Information) == DialogResult.Yes)
+		{
+			try
+			{
+				Updater.OpenUrl(Updater.LatestPage);
+			}
+			catch (Exception ex)
+			{
+				MessageBox.Show(this, "브라우저를 열지 못했습니다. 주소를 직접 여세요:\n" + Updater.LatestPage + "\n\n" + ex.Message, Text, MessageBoxButtons.OK, MessageBoxIcon.Exclamation);
+			}
+		}
 	}
 
 	private void EnsureTray()
@@ -795,6 +966,54 @@ internal class MainForm : Form
 			OpenChat();
 		};
 		grid.Controls.Add(button2, 2, num);
+		num++;
+		grid.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+		grid.Controls.Add(new Label
+		{
+			Text = "",
+			AutoSize = true,
+			Margin = new Padding(2, 6, 6, 0)
+		}, 0, num);
+		grid.Controls.Add(TitleAndDetail("새 버전 알림 (현재 " + Updater.Show(Updater.Current) + ")", ""), 1, num);
+		updateDetail = gridWrapLabels[gridWrapLabels.Count - 1];
+		Button btnUpdateCheck = new Button
+		{
+			Text = "지금 확인",
+			AutoSize = true,
+			Margin = new Padding(0),
+			Padding = new Padding(6, 1, 6, 1)
+		};
+		btnUpdateCheck.Click += async delegate
+		{
+			await CheckUpdate(manual: true);
+		};
+		btnUpdateToggle = new Button
+		{
+			AutoSize = true,
+			Margin = new Padding(4, 0, 0, 0),
+			Padding = new Padding(6, 1, 6, 1)
+		};
+		btnUpdateToggle.Click += delegate
+		{
+			try
+			{
+				Updater.SetAllowed(Updater.Allowed != true);
+			}
+			catch (Exception ex)
+			{
+				MessageBox.Show(this, "설정을 저장하지 못했습니다.\n" + ex.Message, Text, MessageBoxButtons.OK, MessageBoxIcon.Exclamation);
+			}
+			RefreshUpdateRow();
+		};
+		grid.Controls.Add(new FlowLayoutPanel
+		{
+			AutoSize = true,
+			WrapContents = false,
+			Anchor = AnchorStyles.Right,
+			Margin = new Padding(8, 4, 0, 0),
+			Controls = { (Control)btnUpdateCheck, (Control)btnUpdateToggle }
+		}, 2, num);
+		RefreshUpdateRow();
 		grid.Resize += delegate
 		{
 			FitWrapLabels();
@@ -1101,7 +1320,16 @@ internal class MainForm : Form
 			}
 		}
 		btnApply.Enabled = flag;
-		btnRevert.Enabled = flag;
+		// game.exe 가 깨졌거나 없어도 LAA 백업이 있으면 되돌리기로 고칠 수 있게 둔다(되돌리다 끊긴 경우 등).
+		bool hasBackup = false;
+		try
+		{
+			hasBackup = !string.IsNullOrEmpty(exePath) && File.Exists(Pe.BackupPath(exePath));
+		}
+		catch
+		{
+		}
+		btnRevert.Enabled = flag || hasBackup;
 	}
 
 	private void ApplyChecked()
@@ -1424,10 +1652,7 @@ internal class MainForm : Form
 	{
 		try
 		{
-			Process.Start(new ProcessStartInfo(OpenChatUrl)
-			{
-				UseShellExecute = true
-			});
+			Updater.OpenUrl(OpenChatUrl);
 		}
 		catch (Exception ex)
 		{
