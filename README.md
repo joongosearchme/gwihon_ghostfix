@@ -18,6 +18,8 @@
 2. 다운로드 폴더가 아닌 고정 폴더(예: `C:\GhostFix`)에 옮긴 뒤 실행한다. 관리자 권한이 필요하다.
 3. `game.exe` 경로를 확인하고, 원하는 항목을 체크한 뒤 "적용"을 누른다.
 
+받은 파일이 이 저장소에서 빌드한 원본인지 확인하려면, exe가 있는 폴더에서 PowerShell로 `Get-FileHash GhostFix.exe`를 실행해 나온 값을 Releases 설명의 SHA-256 값(또는 함께 올린 `GhostFix.exe.sha256`)과 비교한다. 대소문자는 달라도 된다.
+
 필요 환경: Windows 10/11, .NET Framework 4.8 (Windows 10 1903 이후에는 기본으로 들어 있다).
 
 ## 빌드
@@ -25,7 +27,8 @@
 GitHub에 푸시하면 자동으로 빌드된다(`.github/workflows/build.yml`).
 
 - **테스트용 exe**: 저장소의 Actions 탭 → 해당 실행 → 아래 Artifacts의 `GhostFix`를 내려받는다(zip 안에 exe).
-- **배포**: `v1.1.1` 같은 태그를 푸시하면 그 번호가 exe 버전으로 들어가고 Releases에 `GhostFix.exe`가 올라간다.
+- **배포**: `v1.1.1` 같은 태그를 푸시하면 그 번호가 exe 버전으로 들어가고 Releases에 `GhostFix.exe`와 해시 파일 `GhostFix.exe.sha256`이 올라간다. 설명란에도 SHA-256 값이 적힌다.
+- 빌드마다 SHA-256 값이 Actions 실행 요약 화면에 나온다.
 - 버전·제품 정보는 `GhostFix.csproj`에 있다.
 
 직접 빌드하려면 .NET SDK(6 이상)를 깔고 `dotnet build -c Release` (결과: `bin/Release/net48/GhostFix.exe`).

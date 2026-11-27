@@ -37,11 +37,28 @@ jobs:
         shell: bash
         run: dotnet build GhostFix.csproj -c Release -nologo -o dist ${{ steps.ver.outputs.args }}
 
+      # 받은 exe가 이 빌드 결과와 같은지 확인할 수 있게 SHA-256 해시를 만든다.
+      # GhostFix.exe.sha256 파일로 같이 올리고, 실행 요약 화면과 Releases 설명에도 적는다.
+      - name: 해시 만들기
+        id: hash
+        shell: bash
+        run: |
+          cd dist
+          sha256sum GhostFix.exe > GhostFix.exe.sha256
+          hash=$(cut -d' ' -f1 GhostFix.exe.sha256)
+          echo "sha256=$hash" >> "$GITHUB_OUTPUT"
+          echo "### GhostFix.exe SHA-256" >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          echo "$hash" >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+
       - name: exe 올리기 (Actions 탭)
         uses: actions/upload-artifact@v4
         with:
           name: GhostFix
-          path: dist/GhostFix.exe
+          path: |
+            dist/GhostFix.exe
+            dist/GhostFix.exe.sha256
           if-no-files-found: error
 
       - name: Releases에 올리기 (태그일 때만)
@@ -49,4 +66,8 @@ jobs:
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release create "$GITHUB_REF_NAME" dist/GhostFix.exe --title "GhostFix $GITHUB_REF_NAME" --generate-notes
+          SHA256: ${{ steps.hash.outputs.sha256 }}
+        run: |
+          notes=$(printf '**GhostFix.exe SHA-256**\n```\n%s\n```\nPowerShell에서 `Get-FileHash GhostFix.exe`로 나온 값과 같은지 확인하세요(대소문자 무관).\n' "$SHA256")
+          gh release create "$GITHUB_REF_NAME" dist/GhostFix.exe dist/GhostFix.exe.sha256 \
+            --title "GhostFix $GITHUB_REF_NAME" --notes "$notes" --generate-notes
