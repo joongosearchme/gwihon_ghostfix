@@ -12,9 +12,9 @@
     <ApplicationManifest>app.manifest</ApplicationManifest>
   </PropertyGroup>
 
-  <!-- exe 속성(파일 정보)에 보이는 값. 버전은 build.cmd 1.0.1 처럼 빌드할 때 바꿀 수 있다 -->
+  <!-- exe 속성(파일 정보)에 보이는 값. v1.1.1 같은 태그로 배포하면 버전은 그 번호로 바뀐다 -->
   <PropertyGroup>
-    <Version>1.0.0</Version>
+    <Version>1.1.0</Version>
     <AssemblyTitle>GhostFix</AssemblyTitle>
     <Product>GhostFix</Product>
     <Description>귀혼 game.exe LAA / 호환성 / 자동 유지 관리 설정 도구</Description>

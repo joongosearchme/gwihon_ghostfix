@@ -20,12 +20,12 @@ GitHub에 푸시하면 자동으로 빌드된다(`.github/workflows/build.yml`).
 
 ## 구성
 
-- `src/Program.cs` — 시작점(관리자 권한 재실행, `--tray` 트레이 모드)
+- `src/Program.cs` — 시작점. 프로세스를 하나만 띄운다(이미 떠 있으면 그 창을 띄움), 관리자 권한 재실행, `--tray`는 창 없이 감시로 시작
 - `src/MainForm.cs` — 화면 전체
 - `src/Compat.cs`, `src/Pe.cs` — 호환성 설정, LAA 패치
 - `src/Maint.cs` — Windows 자동 유지 관리 설정
 - `src/Crashes.cs`, `src/Wer.cs` — 튕김 기록·Windows 오류 보고 분석, 원인 모듈(DirectX·VC++·오버레이 프로그램) 안내
-- `src/Watch.cs`, `src/SessionLog.cs` — 시작 프로그램 등록·트레이 감시, 게임 실행 기록(`session.log`)
+- `src/Watch.cs`, `src/SessionLog.cs` — 로그인 자동 시작(작업 스케줄러 `GhostFix`, 가장 높은 권한) 등록, 게임 실행 기록(`session.log`)
 - `src/Nearby.cs` — 튕긴 시각 앞뒤의 Windows 이벤트 로그
 - `src/TcpInfo.cs` — 게임 접속(TCP) 상태
 - `src/PowerInfo.cs` — 절전 설정, 충돌 가능성 있는 프로그램(VPN·백신·Killer 네트워크 등)

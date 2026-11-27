@@ -49,6 +49,12 @@ internal class MainForm : Form
 
 	private readonly EventWaitHandle showSignal;
 
+	private readonly EventWaitHandle quitSignal;
+
+	private bool exiting;
+
+	private bool hideTipShown;
+
 	private readonly List<FixRow> rows = new List<FixRow>();
 
 	private TableLayoutPanel root;
@@ -58,8 +64,6 @@ internal class MainForm : Form
 	private readonly List<Label> gridWrapLabels = new List<Label>();
 
 	private Label note;
-
-	private readonly bool trayMode;
 
 	private Process gameProc;
 
@@ -85,11 +89,11 @@ internal class MainForm : Form
 
 	private string ExePath => txtPath.Text.Trim();
 
-	public MainForm(EventWaitHandle showSignal, bool trayMode)
+	// startHidden: 로그인 때 자동 시작(--tray)이라 창 없이 트레이에서 감시만 시작한다.
+	public MainForm(EventWaitHandle showSignal, EventWaitHandle quitSignal, bool startHidden)
 	{
-		MainForm mainForm = this;
 		this.showSignal = showSignal;
-		this.trayMode = trayMode;
+		this.quitSignal = quitSignal;
 		Text = "GhostFix — 귀혼 튕김 완화";
 		Font = new Font("Malgun Gothic", 10f);
 		base.AutoScaleDimensions = new SizeF(96f, 96f);
@@ -168,16 +172,18 @@ internal class MainForm : Form
 		rows.Add(new FixRow
 		{
 			Title = "게임 중 절전 방지 + 연결·세션 기록 (선택)",
-			Detail = "로그인 때 GhostFix가 트레이로 자동 시작되어 game.exe가 떠 있는 동안 PC 절전을 막고 메모리·서버 연결을 기록합니다. 관리자 권한일 때는 자동 유지 관리도 끕니다. 게임을 끄면 원래대로.",
+			Detail = "로그인 때 GhostFix가 트레이로 자동 시작되어 game.exe가 떠 있는 동안 PC 절전을 막고 자동 유지 관리를 끄며 메모리·서버 연결을 기록합니다. 게임을 끄면 원래대로.",
 			DefaultOn = false,
 			IsApplied = (string p) => Watch.IsRegistered(),
 			Apply = delegate(string p)
 			{
 				Watch.Register(p);
+				StartWatching();
 			},
 			Revert = delegate
 			{
 				Watch.Unregister();
+				StopWatching();
 			}
 		});
 		BuildLayout();
@@ -187,119 +193,63 @@ internal class MainForm : Form
 			txtPath.Text = text;
 		}
 		RefreshStatus();
-		if (trayMode)
+		if (startHidden || Watch.IsRegistered())
 		{
-			SetupTray();
 			StartWatching();
-			return;
 		}
-		System.Windows.Forms.Timer timer = new System.Windows.Forms.Timer();
-		timer.Interval = 700;
-		timer.Tick += delegate
-		{
-			if (showSignal != null && showSignal.WaitOne(0))
-			{
-				mainForm.ShowFromTray();
-			}
-		};
-		timer.Start();
-	}
-
-	private void SetupTray()
-	{
-		ContextMenuStrip contextMenuStrip = new ContextMenuStrip();
-		contextMenuStrip.Items.Add("설정 창 열기", null, delegate
-		{
-			OpenGui();
-		});
-		contextMenuStrip.Items.Add(new ToolStripSeparator());
-		contextMenuStrip.Items.Add("감시 종료", null, delegate
-		{
-			Close();
-		});
-		tray = new NotifyIcon
-		{
-			Icon = (base.Icon ?? SystemIcons.Application),
-			Text = "GhostFix — 귀혼 감시 중",
-			Visible = true,
-			ContextMenuStrip = contextMenuStrip
-		};
-		tray.DoubleClick += delegate
-		{
-			OpenGui();
-		};
+		// 다른 GhostFix 실행이 보내는 "창 띄워라"·"끝내라" 신호
 		ipcTimer = new System.Windows.Forms.Timer
 		{
-			Interval = 700
+			Interval = 500
 		};
 		ipcTimer.Tick += delegate
 		{
-			try
+			if (this.quitSignal != null && this.quitSignal.WaitOne(0))
 			{
-				using EventWaitHandle eventWaitHandle = EventWaitHandle.OpenExisting("GhostFix-Quit");
-				if (eventWaitHandle.WaitOne(0))
-				{
-					Close();
-				}
+				ExitApp();
 			}
-			catch
+			else if (this.showSignal != null && this.showSignal.WaitOne(0))
 			{
+				ShowFromTray();
 			}
 		};
 		ipcTimer.Start();
 	}
 
-	private void OpenGui()
+	private void EnsureTray()
 	{
-		try
+		if (tray != null)
 		{
-			using EventWaitHandle eventWaitHandle = EventWaitHandle.OpenExisting("GhostFix-Show");
-			eventWaitHandle.Set();
 			return;
 		}
-		catch
+		ContextMenuStrip contextMenuStrip = new ContextMenuStrip();
+		contextMenuStrip.Items.Add("설정 창 열기", null, delegate
 		{
-		}
-		try
+			ShowFromTray();
+		});
+		contextMenuStrip.Items.Add(new ToolStripSeparator());
+		contextMenuStrip.Items.Add("GhostFix 종료", null, delegate
 		{
-			Process.Start(new ProcessStartInfo(Application.ExecutablePath)
-			{
-				UseShellExecute = true
-			});
-		}
-		catch (Exception ex)
+			ExitApp();
+		});
+		tray = new NotifyIcon
 		{
-			MessageBox.Show("설정 창을 열지 못했습니다.\n" + ex.Message, "GhostFix");
-		}
+			Icon = (base.Icon ?? SystemIcons.Application),
+			Text = "GhostFix — 귀혼 감시 중",
+			ContextMenuStrip = contextMenuStrip
+		};
+		tray.DoubleClick += delegate
+		{
+			ShowFromTray();
+		};
 	}
 
 	public void HideToTray()
 	{
-		if (trayMode)
+		EnsureTray();
+		if (!watching)
 		{
-			return;
-		}
-		if (tray == null)
-		{
-			ContextMenuStrip contextMenuStrip = new ContextMenuStrip();
-			contextMenuStrip.Items.Add("열기", null, delegate
-			{
-				ShowFromTray();
-			});
-			contextMenuStrip.Items.Add("종료", null, delegate
-			{
-				Close();
-			});
-			tray = new NotifyIcon
-			{
-				Icon = (base.Icon ?? SystemIcons.Application),
-				Text = "GhostFix — 설정 창 (숨김)",
-				ContextMenuStrip = contextMenuStrip
-			};
-			tray.DoubleClick += delegate
-			{
-				ShowFromTray();
-			};
+			tray.Text = "GhostFix — 설정 창 (숨김)";
 		}
 		tray.Visible = true;
 		Hide();
@@ -308,7 +258,25 @@ internal class MainForm : Form
 
 	public void ShowFromTray()
 	{
-		if (tray != null && !trayMode)
+		// 1.0.0 방식 자동 시작으로 일반 권한으로 떠 있으면 설정을 바꿀 수 없다.
+		// 관리자 권한으로 다시 실행하면 새 프로세스가 이 프로세스를 끄고 넘겨받는다(자동 시작도 새 방식으로 옮겨짐).
+		if (!Watch.IsAdmin())
+		{
+			try
+			{
+				Process.Start(new ProcessStartInfo(Application.ExecutablePath)
+				{
+					UseShellExecute = true,
+					Verb = "runas"
+				});
+				return;
+			}
+			catch
+			{
+				// 권한 확인을 거절하면 일반 권한 창이라도 띄운다
+			}
+		}
+		if (tray != null && !watching)
 		{
 			tray.Visible = false;
 		}
@@ -326,15 +294,39 @@ internal class MainForm : Form
 		}
 	}
 
+	// 창의 X: 감시 중이면 트레이로 숨고 감시를 계속한다. 감시가 꺼져 있으면 프로그램을 끝낸다.
 	protected override void OnFormClosing(FormClosingEventArgs e)
 	{
+		if (!exiting && watching && e.CloseReason == CloseReason.UserClosing)
+		{
+			e.Cancel = true;
+			HideToTray();
+			if (!hideTipShown)
+			{
+				hideTipShown = true;
+				tray.ShowBalloonTip(5000, "GhostFix", "트레이에서 귀혼 감시를 계속합니다. 끝내려면 트레이 아이콘을 오른쪽 클릭 → GhostFix 종료.", ToolTipIcon.Info);
+			}
+			return;
+		}
+		base.OnFormClosing(e);
+		ExitApp();
+	}
+
+	// 감시를 멈추고(바꾼 설정 복구 포함) 프로그램을 끝낸다. 창을 한 번도 띄우지 않았어도 끝나도록 Close() 에 기대지 않는다.
+	private void ExitApp()
+	{
+		if (exiting)
+		{
+			return;
+		}
+		exiting = true;
+		ipcTimer?.Stop();
 		StopWatching();
 		if (tray != null)
 		{
 			tray.Visible = false;
 			tray.Dispose();
 		}
-		base.OnFormClosing(e);
 		Application.Exit();
 	}
 
@@ -344,6 +336,9 @@ internal class MainForm : Form
 		{
 			return;
 		}
+		EnsureTray();
+		tray.Text = "GhostFix — 귀혼 감시 중";
+		tray.Visible = true;
 		watching = true;
 		weDisabled = false;
 		if (File.Exists(Watch.FlagPath) && !IsGameRunning())
@@ -377,6 +372,11 @@ internal class MainForm : Form
 		{
 			RestoreMaint();
 		}
+		// 창이 떠 있으면 트레이 아이콘은 필요 없다. 창도 숨어 있으면 다시 열 수 있게 남긴다.
+		if (tray != null && base.Visible)
+		{
+			tray.Visible = false;
+		}
 	}
 
 	private void PollGame()
@@ -397,13 +397,15 @@ internal class MainForm : Form
 				{
 				}
 			}
+			// 게임이 끝나면 꺼 둔 자동 유지 관리를 되돌린다.
+			// (1.0.0 은 트레이가 있으면 이 복구를 건너뛰었지만, 그때 감시는 일반 권한이라 끈 적이 없어 드러나지 않았다)
+			if (!flag && weDisabled)
+			{
+				RestoreMaint();
+			}
 			if (tray != null)
 			{
 				tray.Text = (flag ? ("GhostFix — 게임 실행 중: 절전 방지" + (weDisabled ? " · 자동 유지 관리 꺼짐" : "")) : "GhostFix — 귀혼 감시 중");
-			}
-			else if (!flag && weDisabled)
-			{
-				RestoreMaint();
 			}
 			PowerInfo.KeepAwake(flag);
 			SampleGame(flag);

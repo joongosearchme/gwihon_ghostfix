@@ -3,9 +3,10 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
+using System.Security;
 using System.Security.Principal;
 using System.ServiceProcess;
-using System.Threading;
+using System.Text;
 using System.Windows.Forms;
 using Microsoft.Win32;
 
@@ -17,13 +18,21 @@ public static class Watch
 
 	private const string RunName = "GhostFix";
 
-	public const string TrayMutex = "GhostFix-Tray";
+	private const string TaskName = "GhostFix";
 
-	public const string GuiMutex = "GhostFix-GUI";
+	// 프로세스를 하나만 띄우기 위한 이름들
+	public const string InstanceMutex = "GhostFix";
+
+	public const string ElevatedMutex = "GhostFix-Elevated";
+
+	// 1.0.0 이 쓰던 감시용 프로세스 표시(옛 버전이 떠 있으면 끄라고 알린다)
+	public const string OldTrayMutex = "GhostFix-Tray";
 
 	public const string ShowEvent = "GhostFix-Show";
 
 	public const string QuitEvent = "GhostFix-Quit";
+
+	private static bool? registered;
 
 	private static readonly string[][] KeyServices = new string[17][]
 	{
@@ -64,27 +73,18 @@ public static class Watch
 		}
 	}
 
+	// 자동 시작(로그인 때 감시 시작)이 켜져 있는가. 경로 입력마다 불리므로 한 번만 조회해 둔다.
 	public static bool IsRegistered()
 	{
-		using RegistryKey registryKey = Registry.CurrentUser.OpenSubKey("Software\\Microsoft\\Windows\\CurrentVersion\\Run");
-		return registryKey != null && registryKey.GetValue("GhostFix") is string;
+		if (!registered.HasValue)
+		{
+			registered = TaskExists() || LegacyRunExists();
+		}
+		return registered.Value;
 	}
 
-	public static bool TrayRunning()
-	{
-		try
-		{
-			using (Mutex.OpenExisting("GhostFix-Tray"))
-			{
-				return true;
-			}
-		}
-		catch
-		{
-			return false;
-		}
-	}
-
+	// 자동 시작을 작업 스케줄러("가장 높은 권한으로 실행")에 등록한다.
+	// 시작 프로그램(Run) 방식은 관리자 권한으로 띄울 수 없어 감시가 일반 권한으로 따로 떠야 했다.
 	public static void Register(string gameExe)
 	{
 		string text = Application.ExecutablePath.ToLowerInvariant();
@@ -94,18 +94,103 @@ public static class Watch
 		}
 		Directory.CreateDirectory(Dir);
 		File.WriteAllText(Path.Combine(Dir, "game.txt"), gameExe);
-		using (RegistryKey registryKey = Registry.CurrentUser.CreateSubKey("Software\\Microsoft\\Windows\\CurrentVersion\\Run"))
+		CreateTask();
+		DeleteLegacyRun();
+		registered = true;
+	}
+
+	public static void Unregister()
+	{
+		DeleteLegacyRun();
+		if (TaskExists())
 		{
-			registryKey.SetValue("GhostFix", "\"" + InstalledExe + "\" --tray");
+			RunSchtasks("/Delete /TN \"" + TaskName + "\" /F", out var output);
+			if (TaskExists())
+			{
+				throw new InvalidOperationException("자동 시작 작업을 지우지 못했습니다. " + output);
+			}
 		}
-		if (!TrayRunning())
+		registered = false;
+	}
+
+	// 1.0.0 이 시작 프로그램(Run)에 등록해 둔 것을 작업 스케줄러로 옮긴다. 관리자 권한일 때만.
+	public static void MigrateLegacy()
+	{
+		if (!IsAdmin() || !LegacyRunExists())
+		{
+			return;
+		}
+		try
+		{
+			CreateTask();
+			DeleteLegacyRun();
+			registered = true;
+		}
+		catch
+		{
+		}
+	}
+
+	private static bool LegacyRunExists()
+	{
+		using RegistryKey registryKey = Registry.CurrentUser.OpenSubKey(RunKey);
+		return registryKey != null && registryKey.GetValue(RunName) is string;
+	}
+
+	private static void DeleteLegacyRun()
+	{
+		using RegistryKey registryKey = Registry.CurrentUser.OpenSubKey(RunKey, writable: true);
+		registryKey?.DeleteValue(RunName, throwOnMissingValue: false);
+	}
+
+	private static bool TaskExists()
+	{
+		try
+		{
+			return RunSchtasks("/Query /TN \"" + TaskName + "\"", out var _) == 0;
+		}
+		catch
+		{
+			return false;
+		}
+	}
+
+	private static void CreateTask()
+	{
+		string user = WindowsIdentity.GetCurrent().Name;
+		string exe = InstalledExe;
+		string xml = "<?xml version=\"1.0\" encoding=\"UTF-16\"?>\r\n"
+			+ "<Task version=\"1.2\" xmlns=\"http://schemas.microsoft.com/windows/2004/02/mit/task\">\r\n"
+			+ "  <RegistrationInfo><Description>GhostFix: 로그인 때 트레이로 시작해 귀혼 실행 중 절전 방지·기록</Description></RegistrationInfo>\r\n"
+			+ "  <Triggers><LogonTrigger><Enabled>true</Enabled><UserId>" + Xml(user) + "</UserId><Delay>PT5S</Delay></LogonTrigger></Triggers>\r\n"
+			+ "  <Principals><Principal id=\"Author\"><UserId>" + Xml(user) + "</UserId><LogonType>InteractiveToken</LogonType><RunLevel>HighestAvailable</RunLevel></Principal></Principals>\r\n"
+			+ "  <Settings>\r\n"
+			+ "    <MultipleInstancesPolicy>IgnoreNew</MultipleInstancesPolicy>\r\n"
+			+ "    <DisallowStartIfOnBatteries>false</DisallowStartIfOnBatteries>\r\n"
+			+ "    <StopIfGoingOnBatteries>false</StopIfGoingOnBatteries>\r\n"
+			+ "    <AllowHardTerminate>true</AllowHardTerminate>\r\n"
+			+ "    <AllowStartOnDemand>true</AllowStartOnDemand>\r\n"
+			+ "    <Enabled>true</Enabled>\r\n"
+			+ "    <ExecutionTimeLimit>PT0S</ExecutionTimeLimit>\r\n"
+			+ "    <Priority>6</Priority>\r\n"
+			+ "  </Settings>\r\n"
+			+ "  <Actions Context=\"Author\"><Exec><Command>" + Xml(exe) + "</Command><Arguments>--tray</Arguments><WorkingDirectory>" + Xml(Path.GetDirectoryName(exe)) + "</WorkingDirectory></Exec></Actions>\r\n"
+			+ "</Task>\r\n";
+		Directory.CreateDirectory(Dir);
+		string path = Path.Combine(Dir, "task.xml");
+		File.WriteAllText(path, xml, Encoding.Unicode);
+		try
+		{
+			if (RunSchtasks("/Create /TN \"" + TaskName + "\" /XML \"" + path + "\" /F", out var output) != 0)
+			{
+				throw new InvalidOperationException("자동 시작 작업을 만들지 못했습니다. " + output);
+			}
+		}
+		finally
 		{
 			try
 			{
-				Process.Start(new ProcessStartInfo(InstalledExe, "--tray")
-				{
-					UseShellExecute = true
-				});
+				File.Delete(path);
 			}
 			catch
 			{
@@ -113,20 +198,26 @@ public static class Watch
 		}
 	}
 
-	public static void Unregister()
+	private static string Xml(string s)
 	{
-		using (RegistryKey registryKey = Registry.CurrentUser.OpenSubKey("Software\\Microsoft\\Windows\\CurrentVersion\\Run", writable: true))
+		return SecurityElement.Escape(s);
+	}
+
+	private static int RunSchtasks(string arguments, out string output)
+	{
+		ProcessStartInfo startInfo = new ProcessStartInfo(Path.Combine(Environment.SystemDirectory, "schtasks.exe"), arguments)
 		{
-			registryKey?.DeleteValue("GhostFix", throwOnMissingValue: false);
-		}
-		try
-		{
-			using EventWaitHandle eventWaitHandle = EventWaitHandle.OpenExisting("GhostFix-Quit");
-			eventWaitHandle.Set();
-		}
-		catch
-		{
-		}
+			UseShellExecute = false,
+			CreateNoWindow = true,
+			RedirectStandardOutput = true,
+			RedirectStandardError = true
+		};
+		using Process process = Process.Start(startInfo);
+		string stderr = process.StandardError.ReadToEnd();
+		string stdout = process.StandardOutput.ReadToEnd();
+		process.WaitForExit();
+		output = (stderr + " " + stdout).Trim();
+		return process.ExitCode;
 	}
 
 	public static string SavedGameExe()
