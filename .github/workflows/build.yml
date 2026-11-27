@@ -1,6 +1,8 @@
 # GhostFix 자동 빌드
 # - 어느 브랜치든 푸시하면 Windows 서버에서 빌드하고, Actions 탭의 실행 결과 아래 "Artifacts"에 GhostFix.exe를 올린다.
 # - v1.0.1 같은 태그를 올리면 그 번호를 exe 버전으로 넣어 빌드하고 Releases에 올린다.
+# - 태그를 올릴 수 없을 때: Actions 탭 > build > "Run workflow"에서 main을 고르고 버전(1.2.1 등)을 넣으면
+#   그 커밋으로 빌드한 뒤 v버전 태그를 만들고 Releases에 올린다. 버전을 비우면 배포 없이 빌드만 한다.
 name: build
 
 on:
@@ -9,6 +11,11 @@ on:
     tags: ['v*']
   pull_request:
   workflow_dispatch:
+    inputs:
+      version:
+        description: '배포할 버전(예: 1.2.1). 비우면 배포 없이 빌드만 한다. main에서만 배포된다.'
+        required: false
+        default: ''
 
 # 기본은 읽기만. 쓰기 권한은 필요한 작업(job)에만 준다.
 permissions:
@@ -24,6 +31,7 @@ jobs:
       attestations: write   # 빌드 출처 증명을 저장소에 보관하는 데 필요
     outputs:
       sha256: ${{ steps.hash.outputs.sha256 }}
+      tag: ${{ steps.ver.outputs.tag }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
@@ -36,18 +44,36 @@ jobs:
       - name: 버전 정하기
         id: ver
         shell: bash
-        # 태그 이름은 숫자와 점(v1.2.3)만 받는다. 다른 글자가 든 태그가 빌드 명령에 섞여 들어가지 않게 한다.
+        # 버전은 숫자와 점(1.2.3)만 받는다. 다른 글자가 빌드 명령에 섞여 들어가지 않게 한다.
+        # 버튼으로 배포할 때는 main에서만, 아직 없는 태그로만 받는다(이미 배포한 번호를 덮어쓰지 않게).
+        env:
+          INPUT_VERSION: ${{ github.event_name == 'workflow_dispatch' && inputs.version || '' }}
+          GH_TOKEN: ${{ github.token }}
         run: |
+          ver=""
           if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
             ver="${GITHUB_REF_NAME#v}"
-            if [[ ! "$ver" =~ ^[0-9]+(\.[0-9]+){0,3}$ ]]; then
-              echo "::error::태그 이름은 v1.2.3 형식이어야 합니다: $GITHUB_REF_NAME"
+          elif [[ -n "$INPUT_VERSION" ]]; then
+            ver="${INPUT_VERSION#v}"
+            if [[ "$GITHUB_REF" != refs/heads/main ]]; then
+              echo "::error::버튼 배포는 main에서만 됩니다. 지금 고른 곳: $GITHUB_REF_NAME"
               exit 1
             fi
-            echo "version=$ver" >> "$GITHUB_OUTPUT"
-          else
-            echo "version=" >> "$GITHUB_OUTPUT"
           fi
+          if [[ -n "$ver" && ! "$ver" =~ ^[0-9]+(\.[0-9]+){0,3}$ ]]; then
+            echo "::error::버전은 1.2.3 형식이어야 합니다: $ver"
+            exit 1
+          fi
+          tag=""
+          if [[ -n "$ver" ]]; then
+            tag="v$ver"
+            if [[ -n "$INPUT_VERSION" ]] && gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$tag" --silent 2>/dev/null; then
+              echo "::error::$tag 태그가 이미 있습니다. 다른 버전 번호를 넣으세요."
+              exit 1
+            fi
+          fi
+          echo "version=$ver" >> "$GITHUB_OUTPUT"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
 
       # 값은 워크플로 표현식으로 명령 글에 바로 넣지 않고 환경 변수로 넘긴다.
       - name: 빌드
@@ -94,9 +120,11 @@ jobs:
             dist/GhostFix.exe.sha256
           if-no-files-found: error
 
-  # Releases에 올리기(태그일 때만). 저장소 쓰기 권한은 이 작업에만 준다.
+  # Releases에 올리기(태그를 올렸을 때, 또는 버튼에 버전을 넣었을 때만). 저장소 쓰기 권한은 이 작업에만 준다.
+  # 버튼 배포일 때는 태그가 아직 없으므로, Releases에 올리면서 빌드한 커밋에 태그를 만든다.
+  # (자동 빌드가 만든 태그는 자동 빌드를 다시 일으키지 않는다.)
   release:
-    if: startsWith(github.ref, 'refs/tags/v')
+    if: needs.build.outputs.tag != ''
     needs: build
     runs-on: ubuntu-latest
     permissions:
@@ -112,7 +140,8 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           SHA256: ${{ needs.build.outputs.sha256 }}
+          TAG: ${{ needs.build.outputs.tag }}
         run: |
           notes=$(printf '**GhostFix.exe SHA-256**\n```\n%s\n```\nPowerShell에서 `Get-FileHash GhostFix.exe`로 나온 값과 같은지 확인하세요(대소문자 무관).\n' "$SHA256")
-          gh release create "$GITHUB_REF_NAME" dist/GhostFix.exe dist/GhostFix.exe.sha256 \
-            -R "$GITHUB_REPOSITORY" --title "GhostFix $GITHUB_REF_NAME" --notes "$notes" --generate-notes
+          gh release create "$TAG" dist/GhostFix.exe dist/GhostFix.exe.sha256 \
+            -R "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --title "GhostFix $TAG" --notes "$notes" --generate-notes

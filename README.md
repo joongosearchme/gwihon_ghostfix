@@ -46,7 +46,7 @@ GhostFix.exe에는 아직 코드 서명이 없어서, 받거나 처음 실행할
 GitHub에 푸시하면 자동으로 빌드된다(`.github/workflows/build.yml`).
 
 - **테스트용 exe**: 저장소의 Actions 탭 → 해당 실행 → 아래 Artifacts의 `GhostFix`를 내려받는다(zip 안에 exe).
-- **배포**: `v1.1.1` 같은 태그를 푸시하면 그 번호가 exe 버전으로 들어가고 Releases에 `GhostFix.exe`와 해시 파일 `GhostFix.exe.sha256`이 올라간다. 설명란에도 SHA-256 값이 적힌다.
+- **배포**: `v1.1.1` 같은 태그를 푸시하면 그 번호가 exe 버전으로 들어가고 Releases에 `GhostFix.exe`와 해시 파일 `GhostFix.exe.sha256`이 올라간다. 설명란에도 SHA-256 값이 적힌다. 태그를 푸시할 수 없으면 Actions 탭의 build에서 "Run workflow"를 누르고 main을 고른 뒤 버전(예: `1.2.1`)을 넣는다. 그 커밋으로 빌드하고 `v1.2.1` 태그를 만들어 같은 방식으로 올린다(이미 있는 버전은 거절한다).
 - 빌드마다 SHA-256 값이 Actions 실행 요약 화면에 나온다.
 - 버전·제품 정보는 `GhostFix.csproj`에 있다.
 
