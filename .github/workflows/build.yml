@@ -103,7 +103,7 @@ jobs:
           echo '```' >> "$GITHUB_STEP_SUMMARY"
 
       # "이 exe는 이 저장소의 이 커밋에서 이 자동 빌드로 만들었다"는 증명을 GitHub이 서명해 보관한다.
-      # 확인: gh attestation verify GhostFix.exe -R joongosearchme/gwihon_ghostfix
+      # 확인: gh attestation verify GhostFix.exe -R gwihongg/gwihon_ghostfix
       # PR 빌드(남의 포크 포함)는 서명 권한이 없으므로 건너뛴다.
       - name: 빌드 출처 증명
         if: github.event_name != 'pull_request'

@@ -23,8 +23,10 @@
 해시는 같은 Releases 페이지에 있어서, 저장소 자체가 털리면 exe와 함께 바뀔 수 있다. 더 확실히 확인하려면 빌드 출처 증명을 본다. 자동 빌드는 exe마다 "이 저장소의 어느 커밋에서 자동 빌드로 만들었는지"를 GitHub이 서명한 증명으로 남긴다(1.1.0 배포본에는 없고 그다음 빌드부터). [GitHub CLI](https://cli.github.com/)를 깔고 `gh auth login`으로 로그인한 뒤 exe가 있는 폴더에서 다음을 실행해 `Verification succeeded`가 나오면 된다. 증명 목록은 저장소의 [Attestations](../../attestations) 화면에서도 볼 수 있다.
 
 ```
-gh attestation verify GhostFix.exe -R joongosearchme/gwihon_ghostfix
+gh attestation verify GhostFix.exe -R gwihongg/gwihon_ghostfix
 ```
+
+1.2.0은 저장소를 옮기기 전에 빌드해서, 위 명령이 실패하면 `-R joongosearchme/gwihon_ghostfix`로 확인한다.
 
 ### 처음 받아 실행할 때 나오는 경고
 
