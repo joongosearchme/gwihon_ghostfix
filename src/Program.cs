@@ -61,7 +61,8 @@ internal static class Program
 		if (!admin && !startHidden)
 		{
 			// 관리자 권한 GhostFix 가 이미 떠 있으면 권한 확인(UAC) 없이 그 창만 띄운다.
-			if (Exists(Watch.ElevatedMutex) && ShowExisting())
+			// 단, 새 버전을 받아 실행한 것이면 관리자 권한으로 다시 실행해 떠 있는 옛 버전을 넘겨받는다.
+			if (Exists(Watch.ElevatedMutex) && !Watch.IsUpgrade() && ShowExisting())
 			{
 				return;
 			}
@@ -131,13 +132,14 @@ internal static class Program
 
 	// 이 프로세스가 감시·창을 맡을 하나가 되는가.
 	// 일반 권한으로 떠 있는 GhostFix(1.0.0 방식 자동 시작)를 관리자 권한 GhostFix 가 만나면 그것을 끄고 넘겨받는다.
+	// 새 버전을 받아 실행한 관리자 GhostFix 도 떠 있는 옛 버전을 끄고 넘겨받는다(옛 버전은 끝나면서 바꾼 설정을 되돌린다).
 	private static bool BecomePrimary(Mutex instance, bool admin)
 	{
 		if (TryTake(instance, 0))
 		{
 			return true;
 		}
-		if (!admin || Exists(Watch.ElevatedMutex))
+		if (!admin || (Exists(Watch.ElevatedMutex) && !Watch.IsUpgrade()))
 		{
 			return false;
 		}
