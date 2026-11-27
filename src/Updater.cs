@@ -148,7 +148,8 @@ public static class Updater
 	// 브라우저로 주소를 연다. 관리자 권한 GhostFix가 바로 열면 브라우저도 관리자 권한으로 뜨므로,
 	// 이미 떠 있는 탐색기에 넘겨 보통 권한으로 열게 한다. 탐색기로 못 열면 예외를 내서 주소를 직접 열라고 안내하게 한다
 	// (관리자 권한으로 브라우저를 열지 않는다).
-	public static void OpenUrl(string url)
+	// 탐색기에 넘겼으면 true: 탐색기는 넘겨받자마자 끝나서 브라우저가 실제로 떴는지 알 수 없으니 부른 쪽이 주소를 안내한다.
+	public static bool OpenUrl(string url)
 	{
 		if (Watch.IsAdmin())
 		{
@@ -159,7 +160,7 @@ public static class Updater
 			}))
 			{
 			}
-			return;
+			return true;
 		}
 		using (Process.Start(new ProcessStartInfo(url)
 		{
@@ -167,5 +168,6 @@ public static class Updater
 		}))
 		{
 		}
+		return false;
 	}
 }

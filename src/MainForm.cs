@@ -87,6 +87,8 @@ internal class MainForm : Form
 	// 새 버전 알림
 	private Label updateDetail;
 
+	private TableLayoutPanel optionsGrid;
+
 	private Button btnUpdateToggle;
 
 	private DateTime lastUpdateCheck = DateTime.MinValue;
@@ -113,7 +115,9 @@ internal class MainForm : Form
 		base.FormBorderStyle = FormBorderStyle.FixedSingle;
 		base.MaximizeBox = false;
 		base.StartPosition = FormStartPosition.CenterScreen;
-		base.ClientSize = new Size(760, 600);
+		// 글꼴은 화면 배율만큼 커지는데 창 크기는 자동으로 커지지 않으므로 배율을 직접 곱한다(높이는 FitToContent가 맞춤).
+		// 화면이 좁으면 화면 너비에 맞춘다(설명 글은 줄바꿈되어 높이가 늘고, 높이는 FitToContent가 화면 안으로 맞춘다).
+		base.ClientSize = new Size(Math.Min(Scale(880), MaxClientSize().Width), Scale(600));
 		try
 		{
 			base.Icon = Icon.ExtractAssociatedIcon(Application.ExecutablePath);
@@ -244,7 +248,12 @@ internal class MainForm : Form
 		}
 		bool on = Updater.Allowed == true;
 		updateDetail.Text = on ? "켜짐: 설정 창을 열 때 새 버전이 나왔는지 GitHub에 버전 번호만 물어봅니다." : "꺼짐: [지금 확인]을 누를 때만 새 버전을 확인합니다.";
+		updateDetail.Tag = null;
 		btnUpdateToggle.Text = on ? "자동 끄기" : "자동 켜기";
+		if (base.IsHandleCreated)
+		{
+			FitToContent();
+		}
 	}
 
 	// 자동 확인. 처음에는 허락을 묻고, 허락했으면 12시간에 한 번까지만 확인한다.
@@ -372,14 +381,7 @@ internal class MainForm : Form
 		Version current = Updater.Current;
 		if (MessageBox.Show(this, "새 버전 GhostFix " + Updater.Show(latest) + "이(가) 나왔습니다. (지금 " + Updater.Show(current) + ")\n\n고친 문제가 들어 있으니 새 버전을 받아 설치해 주세요.\n받은 GhostFix.exe를 실행하면 로그인 때 자동 시작도 새 버전으로 바뀝니다.\n\n내려받기 페이지(GitHub Releases)를 열까요?", Text, MessageBoxButtons.YesNo, MessageBoxIcon.Information) == DialogResult.Yes)
 		{
-			try
-			{
-				Updater.OpenUrl(Updater.LatestPage);
-			}
-			catch (Exception ex)
-			{
-				MessageBox.Show(this, "브라우저를 열지 못했습니다. 주소를 직접 여세요:\n" + Updater.LatestPage + "\n\n" + ex.Message, Text, MessageBoxButtons.OK, MessageBoxIcon.Exclamation);
-			}
+			OpenLink(Updater.LatestPage, updateDetail);
 		}
 	}
 
@@ -837,9 +839,12 @@ internal class MainForm : Form
 
 	private void BuildLayout()
 	{
+		// 내용 높이만큼만 차지하고(AutoSize), 창이 내용보다 낮으면(작은 화면) FitToContent가 창 스크롤 막대를 켠다.
 		root = new TableLayoutPanel
 		{
-			Dock = DockStyle.Fill,
+			Dock = DockStyle.Top,
+			AutoSize = true,
+			AutoSizeMode = AutoSizeMode.GrowAndShrink,
 			ColumnCount = 1,
 			Padding = new Padding(16, 14, 16, 12)
 		};
@@ -849,6 +854,9 @@ internal class MainForm : Form
 		root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
 		root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
 		root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+		// 빈 줄: 창이 내용보다 크면 남는 높이가 마지막(버튼) 줄 대신 여기로 가서 FitToContent가 내용 높이만 잰다.
+		root.RowStyles.Add(new RowStyle(SizeType.Percent, 100f));
+		root.RowCount = 6;
 		base.Controls.Add(root);
 		TableLayoutPanel tableLayoutPanel = new TableLayoutPanel
 		{
@@ -923,6 +931,7 @@ internal class MainForm : Form
 		grid.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
 		grid.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100f));
 		grid.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+		optionsGrid = grid;
 		int num = 0;
 		foreach (FixRow row in rows)
 		{
@@ -953,6 +962,7 @@ internal class MainForm : Form
 			Margin = new Padding(2, 6, 6, 0)
 		}, 0, num);
 		grid.Controls.Add(TitleAndDetail("튕김 제보 · 문의", "그래도 튕기면 [튕김 기록] → [기록 복사] 후 오픈채팅에 붙여넣어 주세요. 제작자가 보고 답합니다."), 1, num);
+		Label chatDetail = gridWrapLabels[gridWrapLabels.Count - 1];
 		Button button2 = new Button
 		{
 			Text = "오픈채팅 열기",
@@ -963,7 +973,7 @@ internal class MainForm : Form
 		};
 		button2.Click += delegate
 		{
-			OpenChat();
+			OpenChat(chatDetail);
 		};
 		grid.Controls.Add(button2, 2, num);
 		num++;
@@ -1135,9 +1145,29 @@ internal class MainForm : Form
 		return obj;
 	}
 
+	private float screenDpi;
+
+	// 화면 배율에 맞춘 크기. DeviceDpi는 exe 설정 파일 없이 배포하면 배율과 상관없이 96으로 나와서
+	// (글꼴은 배율만큼 커지는데 창·줄바꿈 너비는 100% 기준이 되어 글이 잘림) 화면에서 직접 읽는다.
 	private int Scale(int v)
 	{
-		return (int)Math.Round((float)(v * ((Control)this).DeviceDpi) / 96f);
+		if (screenDpi <= 0f)
+		{
+			try
+			{
+				using Graphics graphics = Graphics.FromHwnd(IntPtr.Zero);
+				screenDpi = graphics.DpiX;
+			}
+			catch
+			{
+				screenDpi = 96f;
+			}
+			if (screenDpi < 96f)
+			{
+				screenDpi = 96f;
+			}
+		}
+		return (int)Math.Round(v * screenDpi / 96f);
 	}
 
 	private void FitWrapLabels()
@@ -1146,7 +1176,13 @@ internal class MainForm : Form
 		{
 			return;
 		}
+		// 설명 글은 가운데 칸의 실제 너비로 줄바꿈한다. 오른쪽 칸(상태·버튼)이 넓어져도 글 끝이 잘리지 않게.
 		int num = base.ClientSize.Width - Scale(218);
+		int[] columnWidths = optionsGrid?.GetColumnWidths();
+		if (columnWidths != null && columnWidths.Length == 3 && columnWidths[1] > 40)
+		{
+			num = columnWidths[1] - Scale(4);
+		}
 		if (num > 40)
 		{
 			foreach (Label gridWrapLabel in gridWrapLabels)
@@ -1167,20 +1203,63 @@ internal class MainForm : Form
 		FitToContent();
 	}
 
+	// 창이 들어갈 화면 작업 영역(작업 표시줄 제외)에서 창 테두리를 뺀 안쪽 크기.
+	private Size MaxClientSize()
+	{
+		Rectangle area = (base.IsHandleCreated ? Screen.FromControl(this) : Screen.PrimaryScreen).WorkingArea;
+		Size frame = base.Size - base.ClientSize;
+		return new Size(Math.Max(100, area.Width - frame.Width), Math.Max(100, area.Height - frame.Height));
+	}
+
+	// 창 높이를 내용에 맞춘다. 줄바꿈 너비는 칸 너비가 정해진 뒤에야 맞으므로 두 번 맞춘다.
+	// 화면보다 높아지면 화면 높이로 줄이고 스크롤 막대를 띄운다.
 	private void FitToContent()
 	{
+		if (root == null || base.IsDisposed)
+		{
+			return;
+		}
+		// 재는 동안 스크롤 막대를 끈다(글이 늘어 잠깐 뜬 막대만큼 창 너비·줄바꿈 너비가 줄지 않게). 보던 위치는 끝에 되돌린다.
+		Point scroll = base.AutoScrollPosition;
+		base.AutoScroll = false;
+		// 너비를 먼저 화면에 맞춘다(줄바꿈은 맞춘 너비로 재야 높이가 한 번에 맞는다).
+		Size max = MaxClientSize();
+		if (base.ClientSize.Width > max.Width)
+		{
+			base.ClientSize = new Size(max.Width, base.ClientSize.Height);
+		}
+		FitWrapLabels();
+		root.PerformLayout();
 		FitWrapLabels();
 		root.PerformLayout();
 		int num = root.Padding.Vertical;
 		int[] rowHeights = root.GetRowHeights();
-		foreach (int num2 in rowHeights)
+		for (int i = 0; i < rowHeights.Length && i < 5; i++)
 		{
-			num += num2;
+			num += rowHeights[i];
 		}
-		num += Scale(6);
+		num += Scale(12);
+		bool tooTall = num > max.Height;
+		num = Math.Min(num, max.Height);
 		if (num > 0 && num != base.ClientSize.Height)
 		{
 			base.ClientSize = new Size(base.ClientSize.Width, num);
+		}
+		base.AutoScroll = tooTall;
+		if (tooTall)
+		{
+			base.AutoScrollPosition = new Point(-scroll.X, -scroll.Y);
+		}
+		// 주소 안내 등으로 창이 커져 화면 밖으로 나가면 화면 안으로 옮긴다.
+		if (base.IsHandleCreated)
+		{
+			Rectangle area = Screen.FromControl(this).WorkingArea;
+			int left = Math.Max(area.Left, Math.Min(base.Left, area.Right - base.Width));
+			int top = Math.Max(area.Top, Math.Min(base.Top, area.Bottom - base.Height));
+			if (left != base.Left || top != base.Top)
+			{
+				base.Location = new Point(left, top);
+			}
 		}
 	}
 
@@ -1491,7 +1570,7 @@ internal class MainForm : Form
 			StartPosition = FormStartPosition.CenterParent,
 			AutoScaleDimensions = new SizeF(96f, 96f),
 			AutoScaleMode = AutoScaleMode.Dpi,
-			ClientSize = new Size(860, 520),
+			ClientSize = new Size(Math.Min(Scale(860), MaxClientSize().Width), Math.Min(Scale(520), MaxClientSize().Height)),
 			MinimizeBox = false,
 			ShowInTaskbar = false
 		};
@@ -1512,14 +1591,14 @@ internal class MainForm : Form
 			GridLines = false,
 			HeaderStyle = ColumnHeaderStyle.Nonclickable
 		};
-		lv.Columns.Add("시각", 140);
-		lv.Columns.Add("모듈", 140);
-		lv.Columns.Add("예외 코드", 100);
-		lv.Columns.Add("해석", 420);
+		lv.Columns.Add("시각", Scale(140));
+		lv.Columns.Add("모듈", Scale(140));
+		lv.Columns.Add("예외 코드", Scale(100));
+		lv.Columns.Add("해석", Scale(420));
 		lv.Resize += delegate
 		{
-			int num = lv.ClientSize.Width - 380;
-			if (num > 100)
+			int num = lv.ClientSize.Width - Scale(380);
+			if (num > Scale(100))
 			{
 				lv.Columns[3].Width = num;
 			}
@@ -1584,6 +1663,8 @@ internal class MainForm : Form
 				info.Text = "복사 실패: " + ex3.Message;
 				info.ForeColor = Red;
 			}
+			// 글이 바뀌었으니 주소 안내(OpenLink)가 예전 글을 되살리지 않게 비운다.
+			info.Tag = null;
 		};
 		tableLayoutPanel.Controls.Add(button, 1, 0);
 		Button button2 = new Button
@@ -1595,7 +1676,7 @@ internal class MainForm : Form
 		};
 		button2.Click += delegate
 		{
-			OpenChat();
+			OpenChat(info);
 		};
 		tableLayoutPanel.Controls.Add(button2, 2, 0);
 		Button button3 = new Button
@@ -1648,15 +1729,40 @@ internal class MainForm : Form
 		return Regex.Replace(text, Regex.Escape(profile) + "(?!\\w)", "%USERPROFILE%", RegexOptions.IgnoreCase);
 	}
 
-	private void OpenChat()
+	private void OpenChat(Label hint)
 	{
+		OpenLink(OpenChatUrl, hint);
+	}
+
+	// 주소를 브라우저로 연다. 관리자 권한이라 탐색기에 넘겼으면 브라우저가 떴는지 알 수 없으므로
+	// 그 줄의 설명 글(hint) 아래에 주소를 덧붙여 보여 준다(설명 글은 줄바꿈되므로 주소가 잘리지 않는다).
+	// 원래 설명은 Tag에 두어 여러 번 눌러도 주소가 한 번만 붙게 한다.
+	private void OpenLink(string url, Label hint)
+	{
+		bool handedOff;
 		try
 		{
-			Updater.OpenUrl(OpenChatUrl);
+			handedOff = Updater.OpenUrl(url);
 		}
 		catch (Exception ex)
 		{
-			MessageBox.Show(this, "브라우저를 열지 못했습니다. 주소를 직접 여세요:\n" + OpenChatUrl + "\n\n" + ex.Message, Text, MessageBoxButtons.OK, MessageBoxIcon.Exclamation);
+			IWin32Window owner = hint?.FindForm() ?? this;
+			MessageBox.Show(owner, "브라우저를 열지 못했습니다. 주소를 직접 여세요:\n" + url + "\n\n" + ex.Message, Text, MessageBoxButtons.OK, MessageBoxIcon.Exclamation);
+			return;
+		}
+		if (!handedOff || hint == null || hint.IsDisposed)
+		{
+			return;
+		}
+		if (!(hint.Tag is string original))
+		{
+			original = hint.Text;
+			hint.Tag = original;
+		}
+		hint.Text = original + "\n브라우저가 안 뜨면 이 주소를 여세요:\n" + url;
+		if (hint.FindForm() == this)
+		{
+			FitToContent();
 		}
 	}
 }
