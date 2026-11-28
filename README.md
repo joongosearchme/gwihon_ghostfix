@@ -28,7 +28,7 @@
 gh attestation verify GhostFix.exe -R gwihongg/gwihon_ghostfix
 ```
 
-1.2.0은 저장소를 옮기기 전에 빌드해서, 위 명령이 실패하면 `-R gwihongg/gwihon_ghostfix`로 확인한다.
+1.2.2은 저장소를 옮기기 전에 빌드해서, 위 명령이 실패하면 `-R gwihongg/gwihon_ghostfix`로 확인한다.
 
 ### 처음 받아 실행할 때 나오는 경고
 
